@@ -3,7 +3,9 @@ import { hostnameOf, pathKeyOf } from '../core/url'
 import { isAutoMuted } from '../core/priority'
 import type { MuteMap, PageVolumeMap, SiteVolumeMap } from '../core/types'
 import { AudioController, hookMediaElements } from './audio'
+import { setupUrlTracking } from './routing'
 
+const isTopFrame = window.top === window
 const hostname = hostnameOf(location.href)
 let currentPath = pathKeyOf(location.href)
 
@@ -38,7 +40,7 @@ async function applyVolume(): Promise<void> {
     }
   }
   controller.setVolume(muted ? 0 : volume)
-  if (used && hostname) {
+  if (used && hostname && isTopFrame) {
     void browser.runtime.sendMessage({ type: 'vm:used', hostname, path: currentPath }).catch(() => {})
   }
 }
@@ -62,29 +64,12 @@ function onUrlChanged(): void {
   }
 }
 
-for (const m of ['pushState', 'replaceState'] as const) {
-  const orig = history[m].bind(history)
-  history[m] = ((...args: unknown[]) => {
-    const r = orig(...(args as [unknown, string, string?]))
-    onUrlChanged()
-    return r
-  }) as typeof history.pushState
-}
-window.addEventListener('popstate', onUrlChanged)
-window.addEventListener('hashchange', onUrlChanged)
-
-setInterval(() => {
-  const p = pathKeyOf(location.href)
-  if (p !== currentPath) onUrlChanged()
-}, 1500)
+setupUrlTracking(onUrlChanged)
 
 function notifyApplyMute(): void {
+  if (!isTopFrame) return
   void browser.runtime.sendMessage({ type: 'vm:apply-mute' }).catch(() => {})
 }
 
 notifyApplyMute()
-
-document.addEventListener('visibilitychange', () => {
-  if (!document.hidden) notifyApplyMute()
-})
 window.addEventListener('pageshow', () => notifyApplyMute())
