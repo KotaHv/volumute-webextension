@@ -167,7 +167,7 @@ export class KVStore<T extends TimedEntry> {
   }
 }
 
-function evictOldest<T extends TimedEntry>(value: EntryMap<T>): EntryMap<T> | null {
+export function evictOldest<T extends TimedEntry>(value: EntryMap<T>): EntryMap<T> | null {
   let oldestKey: string | null = null
   let oldestTs = Infinity
   for (const [k, v] of Object.entries(value)) {

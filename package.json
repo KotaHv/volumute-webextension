@@ -10,6 +10,7 @@
     "build:chrome": "node scripts/build.js chrome",
     "build:firefox": "node scripts/build.js firefox",
     "typecheck": "tsc --noEmit",
+    "test": "vitest run",
     "lint": "eslint ."
   },
   "devEngines": {
@@ -32,6 +33,7 @@
     "typescript-eslint": "^8.67.0",
     "vite": "^8.2.1",
     "vite-plugin-web-extension": "^4.5.1",
+    "vitest": "^4.1.10",
     "webextension-polyfill": "^0.12.0"
   }
 }
