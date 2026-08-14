@@ -52,6 +52,7 @@ installConnectPatch()
 export class AudioController {
   private ctx: AudioContext | null = null
   private wrapped = new WeakSet<HTMLMediaElement>()
+  private suspended: boolean | null = null
 
   private ensure(): boolean {
     if (this.ctx) return true
@@ -69,6 +70,13 @@ export class AudioController {
 
   setVolume(volume: number): void {
     if (!this.ensure()) return
+    if (volume === 0) {
+      this.suspended = true
+      void this.ctx?.suspend()
+    } else {
+      this.suspended = false
+      void this.ctx?.resume()
+    }
     setAllVolume(volume)
   }
 
@@ -83,7 +91,7 @@ export class AudioController {
       console.log('[VoluMute] media element captured')
       const resume = () => {
         try {
-          void this.ctx?.resume()
+          if (this.suspended !== true) void this.ctx?.resume()
         } catch {
           /* ignore */
         }

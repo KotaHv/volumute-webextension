@@ -93,6 +93,12 @@
     void siteVolumesStore.flushPending()
   }
 
+  function openOptions(): void {
+    void browser.runtime.openOptionsPage()
+    window.close()
+  }
+
+
   function clearPageVol(): void {
     void pageVolumesStore.update((m) => {
       const next = { ...m }
@@ -197,7 +203,7 @@
     </section>
 
     <footer>
-      <button class="link" onclick={() => void browser.runtime.openOptionsPage()}>{tr('openOptions')}</button>
+      <button class="link" onclick={openOptions}>{tr('openOptions')}</button>
     </footer>
   {:else}
     <p class="empty">{tabTitle}</p>
@@ -233,6 +239,22 @@
     --line: #2a2f38;
     --glow: 0 0 5px currentColor;
   }
+  @media (prefers-color-scheme: dark) {
+    :global(:root:not([data-theme])) {
+      --bg: #14161a;
+      --surface: #1d2026;
+      --surface-2: #262b33;
+      --groove: #0e1013;
+      --ink: #e6e8eb;
+      --ink-dim: #8a909c;
+      --amber: #ffaf4d;
+      --amber-glow: 0 0 10px rgba(255, 175, 77, 0.35);
+      --green: #3ecf8e;
+      --red: #e5604f;
+      --line: #2a2f38;
+      --glow: 0 0 5px currentColor;
+    }
+  }
   :global(:root) {
     --mono: ui-monospace, 'SF Mono', 'Cascadia Mono', Menlo, Consolas, monospace;
     --sans: system-ui, -apple-system, 'Segoe UI', sans-serif;
@@ -246,6 +268,7 @@
 
   main {
     width: 300px;
+    max-width: 100%;
     padding: 12px;
     font-family: var(--sans);
     background: var(--bg);

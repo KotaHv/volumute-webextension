@@ -23,10 +23,15 @@ async function applyMuteToTab(tab: browser.Tabs.Tab): Promise<void> {
   if (!hostname) return
   const shouldMute = isAutoMuted(autoMuted.snapshot(), hostname)
   const isMuted = tab.mutedInfo?.muted ?? false
-  if (shouldMute && !isMuted) {
-    await browser.tabs.update(tab.id, { muted: true }).catch(() => {})
+
+  // Browser-level mute (desktop). In-page mute (GainNode) is handled by the
+  // content script reading autoMuted directly, which also covers Android.
+  if (shouldMute) {
+    if (!isMuted) {
+      await browser.tabs.update(tab.id, { muted: true }).catch(() => {})
+    }
     touch('mute', hostname)
-  } else if (!shouldMute && isMuted && tab.mutedInfo?.reason === 'extension') {
+  } else if (isMuted && tab.mutedInfo?.reason === 'extension') {
     await browser.tabs.update(tab.id, { muted: false }).catch(() => {})
   }
 }

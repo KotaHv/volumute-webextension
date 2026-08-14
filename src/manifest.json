@@ -14,9 +14,13 @@
   "{{firefox}}.browser_specific_settings": {
     "gecko": {
       "id": "{77904028-3d58-4f50-a3e7-53d8430baaa0}",
+      "strict_min_version": "140.0",
       "data_collection_permissions": {
         "required": ["none"]
       }
+    },
+    "gecko_android": {
+      "strict_min_version": "142.0"
     }
   },
   "permissions": ["storage", "tabs"],
