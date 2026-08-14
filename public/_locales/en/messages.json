@@ -1,0 +1,8 @@
+{
+  "extensionName": {
+    "message": "VoluMute"
+  },
+  "extensionDescription": {
+    "message": "Auto-mute sites across devices; per-page and per-site volume control up to 5x."
+  }
+}

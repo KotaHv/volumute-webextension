@@ -1,7 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "VoluMute",
-  "description": "Auto-mute sites across devices; per-page and per-site volume control up to 5x.",
+  "default_locale": "en",
+  "name": "__MSG_extensionName__",
+  "description": "__MSG_extensionDescription__",
   "default_locale": "en",
   "icons": {
     "16": "icons/icon-16.png",
