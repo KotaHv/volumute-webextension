@@ -1,126 +1,126 @@
 <script lang="ts">
-  import { onMount } from 'svelte'
-  import { autoMutedStore, pageVolumesStore, siteVolumesStore } from '../storage/stores'
-  import { getDeviceId } from '../storage/deviceId'
-  import { getSettings, subscribeSettings } from '../storage/settings'
-  import { t } from '../i18n'
-  import { applyTheme } from '../theme'
-  import { hostnameOf, pathKeyOf } from '../core/url'
-  import { MAX_MULTIPLIER } from '../core/types'
-  import type { MessageKey } from '../i18n'
-  import type { Settings } from '../core/types'
+  import { onMount } from 'svelte';
+  import { autoMutedStore, pageVolumesStore, siteVolumesStore } from '../storage/stores';
+  import { getDeviceId } from '../storage/deviceId';
+  import { getSettings, subscribeSettings } from '../storage/settings';
+  import { t } from '../i18n';
+  import { applyTheme } from '../theme';
+  import { hostnameOf, pathKeyOf } from '../core/url';
+  import { MAX_MULTIPLIER } from '../core/types';
+  import type { MessageKey } from '../i18n';
+  import type { Settings } from '../core/types';
 
-  let hostname = $state('')
-  let path = $state('')
-  let tabTitle = $state('')
-  let settings = $state<Settings>({ lang: 'auto', theme: 'auto' })
-  let muted = $state(false)
-  let pageVol = $state(1)
-  let siteVol = $state(1)
-  let hasPageVol = $state(false)
-  let hasSiteVol = $state(false)
+  let hostname = $state('');
+  let path = $state('');
+  let tabTitle = $state('');
+  let settings = $state<Settings>({ lang: 'auto', theme: 'auto' });
+  let muted = $state(false);
+  let pageVol = $state(1);
+  let siteVol = $state(1);
+  let hasPageVol = $state(false);
+  let hasSiteVol = $state(false);
 
-  const tr = (key: MessageKey) => t(settings.lang, key)
+  const tr = (key: MessageKey) => t(settings.lang, key);
 
   type ActiveSource = 'mute' | 'page' | 'site' | 'default'
-  const activeSource: ActiveSource = $derived(muted ? 'mute' : hasPageVol ? 'page' : hasSiteVol ? 'site' : 'default')
+  const activeSource: ActiveSource = $derived(muted ? 'mute' : hasPageVol ? 'page' : hasSiteVol ? 'site' : 'default');
 
   onMount(async () => {
-    settings = await getSettings()
-    applyTheme(settings.theme)
+    settings = await getSettings();
+    applyTheme(settings.theme);
     subscribeSettings((s) => {
-      settings = s
-      applyTheme(s.theme)
-    })
-    const [tab] = await browser.tabs.query({ active: true, currentWindow: true })
+      settings = s;
+      applyTheme(s.theme);
+    });
+    const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
     if (!tab?.url) {
-      tabTitle = tr('currentTabNotFound')
-      return
+      tabTitle = tr('currentTabNotFound');
+      return;
     }
-    const h = hostnameOf(tab.url)
-    const p = pathKeyOf(tab.url)
-    if (!h || !p) return
-    hostname = h
-    path = p
-    tabTitle = tab.title ?? h
-    await Promise.all([autoMutedStore.init(), siteVolumesStore.init(), pageVolumesStore.init()])
-    muted = autoMutedStore.snapshot()[h]?.enabled === true
-    const sv = siteVolumesStore.snapshot()
-    hasSiteVol = !!sv[h]
-    siteVol = sv[h]?.multiplier ?? 1
-    const pv = pageVolumesStore.snapshot()
-    hasPageVol = !!pv[p]
-    pageVol = pv[p]?.multiplier ?? 1
+    const h = hostnameOf(tab.url);
+    const p = pathKeyOf(tab.url);
+    if (!h || !p) return;
+    hostname = h;
+    path = p;
+    tabTitle = tab.title ?? h;
+    await Promise.all([autoMutedStore.init(), siteVolumesStore.init(), pageVolumesStore.init()]);
+    muted = autoMutedStore.snapshot()[h]?.enabled === true;
+    const sv = siteVolumesStore.snapshot();
+    hasSiteVol = !!sv[h];
+    siteVol = sv[h]?.multiplier ?? 1;
+    const pv = pageVolumesStore.snapshot();
+    hasPageVol = !!pv[p];
+    pageVol = pv[p]?.multiplier ?? 1;
     autoMutedStore.onChange((m) => {
-      muted = m[hostname]?.enabled === true
-    })
+      muted = m[hostname]?.enabled === true;
+    });
     siteVolumesStore.onChange((m) => {
-      hasSiteVol = !!m[hostname]
-      siteVol = m[hostname]?.multiplier ?? 1
-    })
+      hasSiteVol = !!m[hostname];
+      siteVol = m[hostname]?.multiplier ?? 1;
+    });
     pageVolumesStore.onChange((m) => {
-      hasPageVol = !!m[path]
-      pageVol = m[path]?.multiplier ?? 1
-    })
-  })
+      hasPageVol = !!m[path];
+      pageVol = m[path]?.multiplier ?? 1;
+    });
+  });
 
   async function toggleMute(checked: boolean): Promise<void> {
-    const deviceId = await getDeviceId()
-    const now = Date.now()
+    const deviceId = await getDeviceId();
+    const now = Date.now();
     await autoMutedStore.update(
       (m) => {
-        const next = { ...m }
-        if (checked) next[hostname] = { enabled: true, created: now, lastUsed: now, deviceId }
-        else delete next[hostname]
-        return next
+        const next = { ...m };
+        if (checked) next[hostname] = { enabled: true, created: now, lastUsed: now, deviceId };
+        else delete next[hostname];
+        return next;
       },
       { immediate: true },
-    )
+    );
   }
 
   function setPageVol(v: number): void {
-    pageVol = v
-    const now = Date.now()
+    pageVol = v;
+    const now = Date.now();
     void pageVolumesStore.update((m) => {
-      const existing = m[path]
-      return { ...m, [path]: { multiplier: v, created: existing?.created ?? now, lastUsed: now } }
-    })
+      const existing = m[path];
+      return { ...m, [path]: { multiplier: v, created: existing?.created ?? now, lastUsed: now } };
+    });
   }
 
   function setSiteVol(v: number): void {
-    siteVol = v
-    const now = Date.now()
+    siteVol = v;
+    const now = Date.now();
     void siteVolumesStore.update((m) => {
-      const existing = m[hostname]
-      return { ...m, [hostname]: { multiplier: v, created: existing?.created ?? now, lastUsed: now } }
-    })
+      const existing = m[hostname];
+      return { ...m, [hostname]: { multiplier: v, created: existing?.created ?? now, lastUsed: now } };
+    });
   }
 
   function flushSliders(): void {
-    void pageVolumesStore.flushPending()
-    void siteVolumesStore.flushPending()
+    void pageVolumesStore.flushPending();
+    void siteVolumesStore.flushPending();
   }
 
   function openOptions(): void {
-    void browser.runtime.openOptionsPage()
-    window.close()
+    void browser.runtime.openOptionsPage();
+    window.close();
   }
 
 
   function clearPageVol(): void {
     void pageVolumesStore.update((m) => {
-      const next = { ...m }
-      delete next[path]
-      return next
-    })
+      const next = { ...m };
+      delete next[path];
+      return next;
+    });
   }
 
   function clearSiteVol(): void {
     void siteVolumesStore.update((m) => {
-      const next = { ...m }
-      delete next[hostname]
-      return next
-    })
+      const next = { ...m };
+      delete next[hostname];
+      return next;
+    });
   }
 </script>
 

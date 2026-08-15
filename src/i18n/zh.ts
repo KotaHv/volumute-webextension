@@ -47,4 +47,4 @@ export default {
   importFail: '导入失败',
   confirmDeleteSelected: '确定删除选中的条目?',
   openOptions: '打开设置',
-} as const
+} as const;

@@ -47,4 +47,4 @@ export default {
   importFail: 'Import failed',
   confirmDeleteSelected: 'Delete selected entries?',
   openOptions: 'Open settings',
-} as const
+} as const;

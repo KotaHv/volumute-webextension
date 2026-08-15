@@ -1,44 +1,44 @@
 <script lang="ts">
-  import { onMount } from 'svelte'
-  import { SvelteSet } from 'svelte/reactivity'
-  import DataSection from './DataSection.svelte'
-  import { autoMutedStore, pageVolumesStore, siteVolumesStore } from '../storage/stores'
-  import { getSettings, subscribeSettings, updateSettings } from '../storage/settings'
-  import { currentLang, setCurrentLang, tr } from '../i18n/svelte'
-  import { applyTheme } from '../theme'
-  import { DATA_VERSION, MIN_SUPPORTED_VERSION } from '../core/constants'
-  import { MUTE_MIGRATIONS, VOLUME_MIGRATIONS, migrateMap } from '../core/migrate'
-  import type { MuteMap, PageVolumeMap, Settings, SiteVolumeMap, ThemeMode, Lang } from '../core/types'
+  import { onMount } from 'svelte';
+  import { SvelteSet } from 'svelte/reactivity';
+  import DataSection from './DataSection.svelte';
+  import { autoMutedStore, pageVolumesStore, siteVolumesStore } from '../storage/stores';
+  import { getSettings, subscribeSettings, updateSettings } from '../storage/settings';
+  import { currentLang, setCurrentLang, tr } from '../i18n/svelte';
+  import { applyTheme } from '../theme';
+  import { DATA_VERSION, MIN_SUPPORTED_VERSION } from '../core/constants';
+  import { MUTE_MIGRATIONS, VOLUME_MIGRATIONS, migrateMap } from '../core/migrate';
+  import type { MuteMap, PageVolumeMap, Settings, SiteVolumeMap, ThemeMode, Lang } from '../core/types';
 
   type Tab = 'sites' | 'data' | 'settings'
-  let tab = $state<Tab>('sites')
-  let settings = $state<Settings>({ lang: 'auto', theme: 'auto' })
+  let tab = $state<Tab>('sites');
+  let settings = $state<Settings>({ lang: 'auto', theme: 'auto' });
 
-  let muteMap = $state<MuteMap>({})
-  let siteMap = $state<SiteVolumeMap>({})
-  let pageMap = $state<PageVolumeMap>({})
+  let muteMap = $state<MuteMap>({});
+  let siteMap = $state<SiteVolumeMap>({});
+  let pageMap = $state<PageVolumeMap>({});
 
-  let muteSelected = new SvelteSet<string>()
-  let siteSelected = new SvelteSet<string>()
-  let pageSelected = new SvelteSet<string>()
+  let muteSelected = new SvelteSet<string>();
+  let siteSelected = new SvelteSet<string>();
+  let pageSelected = new SvelteSet<string>();
 
-  let importMode = $state<'merge' | 'overwrite'>('merge')
-  let statusMsg = $state('')
-  let fileInput = $state<HTMLInputElement | null>(null)
+  let importMode = $state<'merge' | 'overwrite'>('merge');
+  let statusMsg = $state('');
+  let fileInput = $state<HTMLInputElement | null>(null);
 
   function fmt(ts: number): string {
-    return new Date(ts).toLocaleString()
+    return new Date(ts).toLocaleString();
   }
 
   function pct(v: number): string {
-    return `${Math.round(v * 100)}%`
+    return `${Math.round(v * 100)}%`;
   }
 
   const muteRows = $derived(Object.entries(muteMap).map(([host, e]) => ({
     key: host,
     value: host,
     sub: `${tr('muteEnabled', $currentLang)} · ${tr('created', $currentLang)}: ${fmt(e.created)} · ${tr('siteLastUsed', $currentLang)}: ${fmt(e.lastUsed)}`,
-  })))
+  })));
 
   const siteRows = $derived(
     Object.entries(siteMap).map(([host, e]) => ({
@@ -46,7 +46,7 @@
       value: host,
       sub: `${tr('volumeMultiplier', $currentLang)}: ${pct(e.multiplier)} · ${tr('created', $currentLang)}: ${fmt(e.created)} · ${tr('siteLastUsed', $currentLang)}: ${fmt(e.lastUsed)}`,
     })),
-  )
+  );
 
   const pageRows = $derived(
     Object.entries(pageMap).map(([url, e]) => ({
@@ -54,71 +54,71 @@
       value: url,
       sub: `${tr('volumeMultiplier', $currentLang)}: ${pct(e.multiplier)} · ${tr('created', $currentLang)}: ${fmt(e.created)} · ${tr('siteLastUsed', $currentLang)}: ${fmt(e.lastUsed)}`,
     })),
-  )
+  );
 
-  const syncBytes = $derived(new TextEncoder().encode(JSON.stringify(muteMap)).length)
+  const syncBytes = $derived(new TextEncoder().encode(JSON.stringify(muteMap)).length);
   const localBytes = $derived(
     new TextEncoder().encode(JSON.stringify({ siteMap, pageMap })).length,
-  )
+  );
 
   onMount(async () => {
-    settings = await getSettings()
-    setCurrentLang(settings.lang)
-    applyTheme(settings.theme)
+    settings = await getSettings();
+    setCurrentLang(settings.lang);
+    applyTheme(settings.theme);
     subscribeSettings((s) => {
-      settings = s
-      setCurrentLang(s.lang)
-      applyTheme(s.theme)
-    })
-    await Promise.all([autoMutedStore.init(), siteVolumesStore.init(), pageVolumesStore.init()])
-    muteMap = autoMutedStore.snapshot()
-    siteMap = siteVolumesStore.snapshot()
-    pageMap = pageVolumesStore.snapshot()
+      settings = s;
+      setCurrentLang(s.lang);
+      applyTheme(s.theme);
+    });
+    await Promise.all([autoMutedStore.init(), siteVolumesStore.init(), pageVolumesStore.init()]);
+    muteMap = autoMutedStore.snapshot();
+    siteMap = siteVolumesStore.snapshot();
+    pageMap = pageVolumesStore.snapshot();
     autoMutedStore.onChange((m) => {
-      muteMap = m
-      for (const k of [...muteSelected]) if (!(k in m)) muteSelected.delete(k)
-    })
+      muteMap = m;
+      for (const k of [...muteSelected]) if (!(k in m)) muteSelected.delete(k);
+    });
     siteVolumesStore.onChange((m) => {
-      siteMap = m
-      for (const k of [...siteSelected]) if (!(k in m)) siteSelected.delete(k)
-    })
+      siteMap = m;
+      for (const k of [...siteSelected]) if (!(k in m)) siteSelected.delete(k);
+    });
     pageVolumesStore.onChange((m) => {
-      pageMap = m
-      for (const k of [...pageSelected]) if (!(k in m)) pageSelected.delete(k)
-    })
-  })
+      pageMap = m;
+      for (const k of [...pageSelected]) if (!(k in m)) pageSelected.delete(k);
+    });
+  });
 
   function refresh(): void {
-    void autoMutedStore.reload()
-    void siteVolumesStore.reload()
-    void pageVolumesStore.reload()
+    void autoMutedStore.reload();
+    void siteVolumesStore.reload();
+    void pageVolumesStore.reload();
   }
 
   async function deleteMutes(): Promise<void> {
-    const keys = [...muteSelected]
+    const keys = [...muteSelected];
     await autoMutedStore.update((m) => {
-      const next = { ...m }
-      for (const k of keys) delete next[k]
-      return next
-    })
+      const next = { ...m };
+      for (const k of keys) delete next[k];
+      return next;
+    });
   }
 
   async function deleteSites(): Promise<void> {
-    const keys = [...siteSelected]
+    const keys = [...siteSelected];
     await siteVolumesStore.update((m) => {
-      const next = { ...m }
-      for (const k of keys) delete next[k]
-      return next
-    })
+      const next = { ...m };
+      for (const k of keys) delete next[k];
+      return next;
+    });
   }
 
   async function deletePages(): Promise<void> {
-    const keys = [...pageSelected]
+    const keys = [...pageSelected];
     await pageVolumesStore.update((m) => {
-      const next = { ...m }
-      for (const k of keys) delete next[k]
-      return next
-    })
+      const next = { ...m };
+      for (const k of keys) delete next[k];
+      return next;
+    });
   }
 
   function exportData(): void {
@@ -126,14 +126,14 @@
       exportedAt: Date.now(),
       sync: { version: DATA_VERSION, autoMuted: muteMap },
       local: { version: DATA_VERSION, siteVolumes: siteMap, pageVolumes: pageMap },
-    }
-    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `volumute-export-${new Date().toISOString().slice(0, 10)}.json`
-    a.click()
-    URL.revokeObjectURL(url)
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `volumute-export-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
   }
 
   function prepareSection<T>(
@@ -141,13 +141,13 @@
     data: T | undefined,
     migrations: Record<number, (map: T) => T>,
   ): T | null {
-    if (version === undefined || version < MIN_SUPPORTED_VERSION || version > DATA_VERSION) return null
-    return migrateMap(migrations, (data ?? {}) as T, version, DATA_VERSION)
+    if (version === undefined || version < MIN_SUPPORTED_VERSION || version > DATA_VERSION) return null;
+    return migrateMap(migrations, (data ?? {}) as T, version, DATA_VERSION);
   }
 
   async function importData(): Promise<void> {
-    const file = fileInput?.files?.[0]
-    if (!file) return
+    const file = fileInput?.files?.[0];
+    if (!file) return;
     try {
       const raw = JSON.parse(await file.text()) as {
         version?: number
@@ -156,57 +156,57 @@
         local?:
           | { version?: number; siteVolumes?: SiteVolumeMap; pageVolumes?: PageVolumeMap }
           | { siteVolumes?: SiteVolumeMap; pageVolumes?: PageVolumeMap }
-      }
+      };
       // Legacy export ({ version, sync: {...}, local: {...} }): lift the
       // top-level version into each section.
-      const legacyTop = typeof raw.version === 'number'
+      const legacyTop = typeof raw.version === 'number';
       const syncRaw = legacyTop
         ? { version: raw.version, autoMuted: (raw.sync as MuteMap | undefined) ?? {} }
-        : (raw.sync as { version?: number; autoMuted?: MuteMap } | undefined)
+        : (raw.sync as { version?: number; autoMuted?: MuteMap } | undefined);
       const localRaw = legacyTop
         ? {
             version: raw.version,
             siteVolumes: ((raw.local as { siteVolumes?: SiteVolumeMap } | undefined)?.siteVolumes ?? {}),
             pageVolumes: ((raw.local as { pageVolumes?: PageVolumeMap } | undefined)?.pageVolumes ?? {}),
           }
-        : (raw.local as { version?: number; siteVolumes?: SiteVolumeMap; pageVolumes?: PageVolumeMap } | undefined)
+        : (raw.local as { version?: number; siteVolumes?: SiteVolumeMap; pageVolumes?: PageVolumeMap } | undefined);
 
-      const impMute = prepareSection(syncRaw?.version, syncRaw?.autoMuted, MUTE_MIGRATIONS)
-      const impSite = prepareSection(localRaw?.version, localRaw?.siteVolumes, VOLUME_MIGRATIONS)
-      const impPage = prepareSection(localRaw?.version, localRaw?.pageVolumes, VOLUME_MIGRATIONS)
+      const impMute = prepareSection(syncRaw?.version, syncRaw?.autoMuted, MUTE_MIGRATIONS);
+      const impSite = prepareSection(localRaw?.version, localRaw?.siteVolumes, VOLUME_MIGRATIONS);
+      const impPage = prepareSection(localRaw?.version, localRaw?.pageVolumes, VOLUME_MIGRATIONS);
       if (impMute === null || impSite === null || impPage === null) {
-        statusMsg = tr('importFail', $currentLang)
-        return
+        statusMsg = tr('importFail', $currentLang);
+        return;
       }
       if (importMode === 'overwrite') {
-        await autoMutedStore.update(() => ({ ...impMute }))
-        await siteVolumesStore.update(() => ({ ...impSite }))
-        await pageVolumesStore.update(() => ({ ...impPage }))
+        await autoMutedStore.update(() => ({ ...impMute }));
+        await siteVolumesStore.update(() => ({ ...impSite }));
+        await pageVolumesStore.update(() => ({ ...impPage }));
       } else {
         await autoMutedStore.update((c) => {
-          const next = { ...c }
+          const next = { ...c };
           for (const [k, v] of Object.entries(impMute)) {
-            const cur = next[k]
-            const lastUsed = (v as { lastUsed?: number }).lastUsed ?? 0
-            if (!cur || lastUsed > ((cur as { lastUsed?: number }).lastUsed ?? 0)) next[k] = v
+            const cur = next[k];
+            const lastUsed = (v as { lastUsed?: number }).lastUsed ?? 0;
+            if (!cur || lastUsed > ((cur as { lastUsed?: number }).lastUsed ?? 0)) next[k] = v;
           }
-          return next
-        })
-        await siteVolumesStore.update((c) => ({ ...impSite, ...c }))
-        await pageVolumesStore.update((c) => ({ ...impPage, ...c }))
+          return next;
+        });
+        await siteVolumesStore.update((c) => ({ ...impSite, ...c }));
+        await pageVolumesStore.update((c) => ({ ...impPage, ...c }));
       }
-      statusMsg = tr('importSuccess', $currentLang)
+      statusMsg = tr('importSuccess', $currentLang);
     } catch {
-      statusMsg = tr('importFail', $currentLang)
+      statusMsg = tr('importFail', $currentLang);
     }
   }
 
   async function setLang(lang: Lang): Promise<void> {
-    await updateSettings({ lang })
+    await updateSettings({ lang });
   }
 
   async function setTheme(theme: ThemeMode): Promise<void> {
-    await updateSettings({ theme })
+    await updateSettings({ theme });
   }
 </script>
 

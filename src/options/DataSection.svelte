@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { SvelteSet } from 'svelte/reactivity'
-  import { currentLang, tr } from '../i18n/svelte'
+  import { SvelteSet } from 'svelte/reactivity';
+  import { currentLang, tr } from '../i18n/svelte';
 
   interface Row {
     key: string
@@ -22,21 +22,21 @@
     selected?: Set<string>
     onDelete?: () => void
     selectable?: boolean
-  } = $props()
+  } = $props();
 
-  const allSelected = $derived(rows.length > 0 && rows.every((r) => selected.has(r.key)))
+  const allSelected = $derived(rows.length > 0 && rows.every((r) => selected.has(r.key)));
 
   function toggleAll(): void {
     if (allSelected) {
-      for (const r of rows) selected.delete(r.key)
+      for (const r of rows) selected.delete(r.key);
     } else {
-      for (const r of rows) selected.add(r.key)
+      for (const r of rows) selected.add(r.key);
     }
   }
 
   function toggle(key: string): void {
-    if (selected.has(key)) selected.delete(key)
-    else selected.add(key)
+    if (selected.has(key)) selected.delete(key);
+    else selected.add(key);
   }
 </script>
 

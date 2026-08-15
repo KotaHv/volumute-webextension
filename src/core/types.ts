@@ -31,8 +31,8 @@ export interface EffectiveConfig {
   multiplier: number
 }
 
-export const MAX_MULTIPLIER = 5
-export const DEFAULT_MULTIPLIER = 1
+export const MAX_MULTIPLIER = 5;
+export const DEFAULT_MULTIPLIER = 1;
 
 export interface QuotaStats {
   bytes: number

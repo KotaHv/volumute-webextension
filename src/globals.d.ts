@@ -1,7 +1,7 @@
-import type BrowserNS from 'webextension-polyfill'
+import type BrowserNS from 'webextension-polyfill';
 
 declare global {
-  const browser: BrowserNS.Browser
+  const browser: BrowserNS.Browser;
 }
 
-export {}
+export {};

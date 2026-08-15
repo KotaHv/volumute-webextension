@@ -1,7 +1,7 @@
-import { mount } from 'svelte'
-import browser from 'webextension-polyfill'
+import { mount } from 'svelte';
+import browser from 'webextension-polyfill';
 import Popup from './Popup.svelte'
 
-;(globalThis as unknown as { browser: typeof browser }).browser = browser
+;(globalThis as unknown as { browser: typeof browser }).browser = browser;
 
-mount(Popup, { target: document.getElementById('app')! })
+mount(Popup, { target: document.getElementById('app')! });
