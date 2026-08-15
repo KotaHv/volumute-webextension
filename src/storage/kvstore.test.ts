@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { evictOldest, mergeByLastWrite, mergeFresh, mergeUnion } from './kvstore';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { evictOldest, KVStore, mergeByLastWrite, mergeFresh, mergeUnion } from './kvstore';
 import type { MuteEntry, VolumeEntry } from '../core/types';
 
 const mute = (lastUsed: number, deviceId = 'a'): MuteEntry => ({ enabled: true, created: lastUsed, lastUsed, deviceId });
@@ -68,5 +68,85 @@ describe('evictOldest', () => {
 
   it('returns null when nothing to evict', () => {
     expect(evictOldest({})).toBeNull();
+  });
+});
+
+describe('KVStore schema versioning', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  function makeBrowser() {
+    const data: Record<string, unknown> = {};
+    const area = {
+      get: async (keys: string | string[] | null) => {
+        if (keys === null) return { ...data };
+        const list = Array.isArray(keys) ? keys : [keys];
+        const out: Record<string, unknown> = {};
+        for (const k of list) {
+          if (k in data) out[k] = data[k];
+        }
+        return out;
+      },
+      set: async (items: Record<string, unknown>) => {
+        Object.assign(data, items);
+      },
+      remove: async (key: string) => {
+        delete data[key];
+      },
+    };
+    const listeners: Array<(changes: unknown, area: string) => void> = [];
+    const browser = {
+      storage: {
+        local: area,
+        sync: area,
+        onChanged: {
+          addListener: (cb: (changes: unknown, area: string) => void) => {
+            listeners.push(cb);
+          },
+        },
+      },
+    };
+    return { data, browser };
+  }
+
+  const markMigration = {
+    1: (map: Record<string, { lastUsed?: number }>) => {
+      const out: Record<string, { lastUsed?: number }> = {};
+      for (const [k, v] of Object.entries(map)) {
+        out[k] = { lastUsed: (v.lastUsed ?? 0) + 1 };
+      }
+      return out;
+    },
+  };
+
+  it('writes per-key version so two stores in one area migrate independently', async () => {
+    const { data, browser } = makeBrowser();
+    vi.stubGlobal('browser', browser);
+    data.a = { 'a.com': {} };
+    data.b = { 'b.com': {} };
+    const storeA = new KVStore<{ lastUsed?: number }>('local', 'a', mergeUnion, markMigration, 2);
+    const storeB = new KVStore<{ lastUsed?: number }>('local', 'b', mergeUnion, markMigration, 2);
+    await storeA.init();
+    await storeB.init();
+    expect(storeA.snapshot()['a.com']?.lastUsed).toBe(1);
+    expect(storeB.snapshot()['b.com']?.lastUsed).toBe(1);
+    expect(data['schemaVersion:a']).toBe(2);
+    expect(data['schemaVersion:b']).toBe(2);
+  });
+
+  it('does not skip the second store when the first already reached the target version', async () => {
+    const { data, browser } = makeBrowser();
+    vi.stubGlobal('browser', browser);
+    data.a = { 'a.com': { lastUsed: 1 } };
+    data['schemaVersion:a'] = 2;
+    data.b = { 'b.com': {} };
+    const storeA = new KVStore<{ lastUsed?: number }>('local', 'a', mergeUnion, markMigration, 2);
+    const storeB = new KVStore<{ lastUsed?: number }>('local', 'b', mergeUnion, markMigration, 2);
+    await storeA.init();
+    await storeB.init();
+    expect(storeA.snapshot()['a.com']?.lastUsed).toBe(1);
+    expect(storeB.snapshot()['b.com']?.lastUsed).toBe(1);
+    expect(data['schemaVersion:b']).toBe(2);
   });
 });

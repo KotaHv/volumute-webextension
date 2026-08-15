@@ -16,11 +16,12 @@ export const MUTE_MIGRATIONS: Record<number, (map: MuteMap) => MuteMap> = {
       }
       changed = true;
       const now = Date.now();
+      const lastUsed = typeof entry.lastUsed === 'number' ? entry.lastUsed : legacy.ts ?? now;
       out[key] = {
         enabled: entry.enabled,
         deviceId: entry.deviceId,
-        created: typeof entry.created === 'number' ? entry.created : now,
-        lastUsed: typeof entry.lastUsed === 'number' ? entry.lastUsed : legacy.ts ?? now,
+        created: typeof entry.created === 'number' ? entry.created : lastUsed,
+        lastUsed,
       } satisfies MuteEntry;
     }
     return changed ? out : map;
@@ -43,10 +44,11 @@ export const VOLUME_MIGRATIONS: Record<number, (map: Record<string, VolumeEntry>
       }
       changed = true;
       const now = Date.now();
+      const lastUsed = typeof entry.lastUsed === 'number' ? entry.lastUsed : legacy.t ?? now;
       out[key] = {
         multiplier: typeof entry.multiplier === 'number' ? entry.multiplier : legacy.v ?? 1,
-        created: typeof entry.created === 'number' ? entry.created : now,
-        lastUsed: typeof entry.lastUsed === 'number' ? entry.lastUsed : legacy.t ?? now,
+        created: typeof entry.created === 'number' ? entry.created : lastUsed,
+        lastUsed,
       } satisfies VolumeEntry;
     }
     return changed ? out : map;

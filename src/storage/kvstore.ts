@@ -1,4 +1,4 @@
-import { SCHEMA_VERSION_KEY } from "../core/constants";
+import { schemaVersionKey } from "../core/constants";
 import { migrateMap } from "../core/migrate";
 
 const DEBOUNCE_MS = 300;
@@ -51,14 +51,15 @@ export class KVStore<T extends TimedEntry> {
   async init(): Promise<void> {
     if (this.loaded) return;
     const area = browser.storage[this.area];
-    const stored = await area.get([this.key, SCHEMA_VERSION_KEY]);
+    const versionKey = schemaVersionKey(this.key);
+    const stored = await area.get([this.key, versionKey]);
     let data = mergeFresh(
       this.merge,
       {},
       (stored[this.key] ?? {}) as EntryMap<T> | undefined,
     );
     const storedVersion =
-      (stored[SCHEMA_VERSION_KEY] as number | undefined) ?? 1;
+      (stored[versionKey] as number | undefined) ?? 1;
     if (storedVersion < this.schemaVersion) {
       const migrated = migrateMap(
         this.migrations ?? {},
@@ -71,7 +72,7 @@ export class KVStore<T extends TimedEntry> {
         try {
           await area.set({
             [this.key]: data,
-            [SCHEMA_VERSION_KEY]: this.schemaVersion,
+            [versionKey]: this.schemaVersion,
           });
         } catch (err) {
           console.warn(
