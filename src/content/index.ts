@@ -12,11 +12,12 @@ const controller = new AudioController();
 hookMediaElements(controller);
 let isMuted = false;
 
-browser.runtime.onMessage.addListener((msg: unknown) => {
-  const m = msg as { type?: string; muted?: boolean } | undefined;
-  if (!m || m.type !== "vm:mute-state") return;
+const port = browser.runtime.connect({ name: "mute-state" });
+port.onMessage.addListener((msg: unknown) => {
+  const m = msg as { muted?: boolean } | undefined;
+  if (typeof m?.muted !== "boolean") return;
   console.log("[VoluMute] mute-state received", m.muted);
-  isMuted = m.muted ?? false;
+  isMuted = m.muted;
   void applyVolume(false);
 });
 

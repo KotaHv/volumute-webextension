@@ -24,21 +24,12 @@ function touch(hostname: string) {
   autoMutedStore.touchEntry(hostname);
 }
 
-const lastSentState = new Map<number, boolean>();
+const portsByTab = new Map<number, Set<browser.Runtime.Port>>();
 
-async function sendMuteState(tabId: number, muted: boolean): Promise<void> {
-  if (lastSentState.get(tabId) === muted) return;
-  try {
-    await browser.tabs.sendMessage(tabId, {
-      type: "vm:mute-state",
-      muted,
-    });
-    lastSentState.set(tabId, muted);
-    console.log("[VoluMute] mute-state sent", tabId);
-  } catch {
-    lastSentState.delete(tabId);
-    console.log("[VoluMute] mute-state send failed", tabId);
-  }
+function pushMuteState(tabId: number, muted: boolean): void {
+  const ports = portsByTab.get(tabId);
+  if (!ports) return;
+  for (const port of ports) port.postMessage({ muted });
 }
 
 async function applyMuteToTab(tab: browser.Tabs.Tab): Promise<void> {
@@ -53,17 +44,17 @@ async function applyMuteToTab(tab: browser.Tabs.Tab): Promise<void> {
     if (tabMuteSupported === true) {
       await setTabMuted(tab.id, true);
     } else if (tabMuteSupported === false) {
-      await sendMuteState(tab.id, true);
+      pushMuteState(tab.id, true);
     } else {
       await setTabMuted(tab.id, true);
       if (tabMuteSupported === false) {
-        await sendMuteState(tab.id, true);
+        pushMuteState(tab.id, true);
       }
     }
     touch(hostname);
   } else {
     if (tabMuteSupported === false) {
-      await sendMuteState(tab.id, false);
+      pushMuteState(tab.id, false);
     } else if (tabMuteSupported === true) {
       if (isMuted && tab.mutedInfo?.reason === "extension") {
         await setTabMuted(tab.id, false);
@@ -71,7 +62,7 @@ async function applyMuteToTab(tab: browser.Tabs.Tab): Promise<void> {
     } else {
       await setTabMuted(tab.id, false);
       if (tabMuteSupported === false) {
-        await sendMuteState(tab.id, false);
+        pushMuteState(tab.id, false);
       }
     }
   }
@@ -86,6 +77,31 @@ async function reapplyAll(): Promise<void> {
 
 async function main(): Promise<void> {
   await autoMutedStore.init();
+  browser.runtime.onConnect.addListener((port) => {
+    if (port.name !== "mute-state") return;
+    const tabId = port.sender?.tab?.id;
+    if (tabId === undefined) return;
+    let ports = portsByTab.get(tabId);
+    if (!ports) {
+      ports = new Set();
+      portsByTab.set(tabId, ports);
+    }
+    ports.add(port);
+    port.onDisconnect.addListener(() => {
+      const live = portsByTab.get(tabId);
+      if (!live) return;
+      live.delete(port);
+      if (live.size === 0) portsByTab.delete(tabId);
+    });
+    if (tabMuteSupported !== false) return;
+    const hostname = hostnameOf(port.sender?.tab?.url ?? "");
+    const muted =
+      hostname !== null && isAutoMuted(autoMutedStore.snapshot(), hostname);
+    port.postMessage({ muted });
+  });
+  browser.tabs.onRemoved.addListener((tabId) => {
+    portsByTab.delete(tabId);
+  });
   browser.tabs.onUpdated.addListener((_tabId, changeInfo, tab) => {
     if (changeInfo.url || changeInfo.status === "loading")
       void applyMuteToTab(tab);
