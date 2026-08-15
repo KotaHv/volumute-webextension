@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte'
+  import { SvelteSet } from 'svelte/reactivity'
   import DataSection from './DataSection.svelte'
   import { autoMutedStore, pageVolumesStore, siteVolumesStore } from '../storage/stores'
   import { getSettings, subscribeSettings, updateSettings } from '../storage/settings'
@@ -17,9 +18,9 @@
   let siteMap = $state<SiteVolumeMap>({})
   let pageMap = $state<PageVolumeMap>({})
 
-  let muteSelected = $state<Set<string>>(new Set())
-  let siteSelected = $state<Set<string>>(new Set())
-  let pageSelected = $state<Set<string>>(new Set())
+  let muteSelected = new SvelteSet<string>()
+  let siteSelected = new SvelteSet<string>()
+  let pageSelected = new SvelteSet<string>()
 
   let importMode = $state<'merge' | 'overwrite'>('merge')
   let statusMsg = $state('')
@@ -75,15 +76,15 @@
     pageMap = pageVolumesStore.snapshot()
     autoMutedStore.onChange((m) => {
       muteMap = m
-      muteSelected = new Set([...muteSelected].filter((k) => k in m))
+      for (const k of [...muteSelected]) if (!(k in m)) muteSelected.delete(k)
     })
     siteVolumesStore.onChange((m) => {
       siteMap = m
-      siteSelected = new Set([...siteSelected].filter((k) => k in m))
+      for (const k of [...siteSelected]) if (!(k in m)) siteSelected.delete(k)
     })
     pageVolumesStore.onChange((m) => {
       pageMap = m
-      pageSelected = new Set([...pageSelected].filter((k) => k in m))
+      for (const k of [...pageSelected]) if (!(k in m)) pageSelected.delete(k)
     })
   })
 
