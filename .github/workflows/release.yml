@@ -41,6 +41,8 @@ jobs:
 
       - name: Build extensions and packages
         run: pnpm build
+        env:
+          VOLUMUTE_RELEASE: "1"
 
       - name: Create Release
         uses: softprops/action-gh-release@v3

@@ -17,6 +17,7 @@ export default ts.config(
         ...globals.browser,
         ...globals.node,
         browser: 'readonly',
+        __BUILD_STAMP__: 'readonly',
       },
     },
     rules: {

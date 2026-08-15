@@ -15,6 +15,9 @@
   let settings = $state<Settings>({ lang: 'auto', theme: 'auto' });
 
   const version = browser.runtime.getManifest().version;
+  const versionLabel = __BUILD_STAMP__
+    ? `v${version} · ${__BUILD_STAMP__}`
+    : `v${version}`;
 
   let muteMap = $state<MuteMap>({});
   let siteMap = $state<SiteVolumeMap>({});
@@ -217,7 +220,7 @@
     <div class="brand">
       <span class="brand-mark"></span>
       <span class="brand-name">VOLUMUTE</span>
-      <span class="ver">v{version}</span>
+      <span class="ver">{versionLabel}</span>
     </div>
     <nav>
       <button class:active={tab === 'sites'} onclick={() => (tab = 'sites')}>{tr('tabSiteList', $currentLang)}</button>

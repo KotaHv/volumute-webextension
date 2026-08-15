@@ -21,6 +21,9 @@
   let hasSiteVol = $state(false);
 
   const version = browser.runtime.getManifest().version;
+  const versionLabel = __BUILD_STAMP__
+    ? `v${version} · ${__BUILD_STAMP__}`
+    : `v${version}`;
 
   const tr = (key: MessageKey) => t(settings.lang, key);
 
@@ -213,7 +216,7 @@
     </section>
 
     <footer>
-      <span class="ver">v{version}</span>
+      <span class="ver">{versionLabel}</span>
       <button class="link" onclick={openOptions}>{tr('openOptions')}</button>
     </footer>
   {:else}
