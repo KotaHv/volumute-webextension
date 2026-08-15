@@ -12,7 +12,7 @@
     title,
     rows,
     emptyText,
-    selected = $bindable(new SvelteSet<string>()),
+    selected = new SvelteSet<string>(),
     onDelete = () => {},
     selectable = true,
   }: {

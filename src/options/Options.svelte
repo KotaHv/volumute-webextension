@@ -232,21 +232,21 @@
         title={tr('tabSiteList', $currentLang) + ': ' + tr('autoMute', $currentLang)}
         rows={muteRows}
         emptyText={tr('noEntries', $currentLang)}
-        bind:selected={muteSelected}
+        selected={muteSelected}
         onDelete={deleteMutes}
       />
       <DataSection
         title={tr('siteVolume', $currentLang)}
         rows={siteRows}
         emptyText={tr('noEntries', $currentLang)}
-        bind:selected={siteSelected}
+        selected={siteSelected}
         onDelete={deleteSites}
       />
       <DataSection
         title={tr('pageVolume', $currentLang)}
         rows={pageRows}
         emptyText={tr('noEntries', $currentLang)}
-        bind:selected={pageSelected}
+        selected={pageSelected}
         onDelete={deletePages}
       />
     </div>
@@ -279,21 +279,21 @@
         title={tr('autoMute', $currentLang)}
         rows={muteRows}
         emptyText={tr('noEntries', $currentLang)}
-        bind:selected={muteSelected}
+        selected={muteSelected}
         onDelete={deleteMutes}
       />
       <DataSection
         title={tr('siteVolume', $currentLang)}
         rows={siteRows}
         emptyText={tr('noEntries', $currentLang)}
-        bind:selected={siteSelected}
+        selected={siteSelected}
         onDelete={deleteSites}
       />
       <DataSection
         title={tr('pageVolume', $currentLang)}
         rows={pageRows}
         emptyText={tr('noEntries', $currentLang)}
-        bind:selected={pageSelected}
+        selected={pageSelected}
         onDelete={deletePages}
       />
     </div>
