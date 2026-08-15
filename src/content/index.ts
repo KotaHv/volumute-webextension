@@ -76,7 +76,19 @@ function onUrlChanged(): void {
   const p = pathKeyOf(location.href);
   if (p !== currentPath) {
     currentPath = p;
-    void applyVolume(true);
+void initMuteState();
+
+async function initMuteState(): Promise<void> {
+  try {
+    const res = (await browser.runtime.sendMessage({
+      type: "vm:mute-query",
+    })) as { muted?: boolean } | undefined;
+    isMuted = res?.muted ?? false;
+  } catch {
+    /* bg not ready yet; the startup reapply push will correct us */
+  }
+  await applyVolume(true);
+}
   }
 }
 

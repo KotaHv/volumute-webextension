@@ -24,20 +24,14 @@ function touch(hostname: string) {
   autoMutedStore.touchEntry(hostname);
 }
 
-const lastSentState = new Map<number, boolean>();
-
-async function sendMuteState(tabId: number, muted: boolean): Promise<void> {
-  if (lastSentState.get(tabId) === muted) return;
+async function pushMuteState(tabId: number, muted: boolean): Promise<void> {
   try {
     await browser.tabs.sendMessage(tabId, {
       type: "vm:mute-state",
       muted,
     });
-    lastSentState.set(tabId, muted);
-    console.log("[VoluMute] mute-state sent", tabId);
   } catch {
-    lastSentState.delete(tabId);
-    console.log("[VoluMute] mute-state send failed", tabId);
+    /* no live content script yet; it pulls on load instead */
   }
 }
 
@@ -53,17 +47,17 @@ async function applyMuteToTab(tab: browser.Tabs.Tab): Promise<void> {
     if (tabMuteSupported === true) {
       await setTabMuted(tab.id, true);
     } else if (tabMuteSupported === false) {
-      await sendMuteState(tab.id, true);
+      await pushMuteState(tab.id, true);
     } else {
       await setTabMuted(tab.id, true);
       if (tabMuteSupported === false) {
-        await sendMuteState(tab.id, true);
+        await pushMuteState(tab.id, true);
       }
     }
     touch(hostname);
   } else {
     if (tabMuteSupported === false) {
-      await sendMuteState(tab.id, false);
+      await pushMuteState(tab.id, false);
     } else if (tabMuteSupported === true) {
       if (isMuted && tab.mutedInfo?.reason === "extension") {
         await setTabMuted(tab.id, false);
@@ -71,7 +65,7 @@ async function applyMuteToTab(tab: browser.Tabs.Tab): Promise<void> {
     } else {
       await setTabMuted(tab.id, false);
       if (tabMuteSupported === false) {
-        await sendMuteState(tab.id, false);
+        await pushMuteState(tab.id, false);
       }
     }
   }
@@ -86,6 +80,16 @@ async function reapplyAll(): Promise<void> {
 
 async function main(): Promise<void> {
   await autoMutedStore.init();
+  browser.runtime.onMessage.addListener(
+    async (msg: unknown, sender: browser.Runtime.MessageSender) => {
+      const m = msg as { type?: string } | undefined;
+      if (!m || m.type !== "vm:mute-query") return;
+      const hostname = hostnameOf(sender.tab?.url ?? sender.url ?? "");
+      return {
+        muted: hostname !== null && isAutoMuted(autoMutedStore.snapshot(), hostname),
+      };
+    },
+  );
   browser.tabs.onUpdated.addListener((_tabId, changeInfo, tab) => {
     if (changeInfo.url || changeInfo.status === "loading")
       void applyMuteToTab(tab);
