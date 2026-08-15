@@ -14,6 +14,8 @@
   let tab = $state<Tab>('sites');
   let settings = $state<Settings>({ lang: 'auto', theme: 'auto' });
 
+  const version = browser.runtime.getManifest().version;
+
   let muteMap = $state<MuteMap>({});
   let siteMap = $state<SiteVolumeMap>({});
   let pageMap = $state<PageVolumeMap>({});
@@ -215,6 +217,7 @@
     <div class="brand">
       <span class="brand-mark"></span>
       <span class="brand-name">VOLUMUTE</span>
+      <span class="ver">v{version}</span>
     </div>
     <nav>
       <button class:active={tab === 'sites'} onclick={() => (tab = 'sites')}>{tr('tabSiteList', $currentLang)}</button>
@@ -398,6 +401,12 @@
     font-family: var(--mono);
     font-size: 13px;
     letter-spacing: 0.2em;
+  }
+  .ver {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    color: var(--ink-dim);
   }
   nav {
     display: flex;

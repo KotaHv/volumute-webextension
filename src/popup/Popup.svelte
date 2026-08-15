@@ -20,6 +20,8 @@
   let hasPageVol = $state(false);
   let hasSiteVol = $state(false);
 
+  const version = browser.runtime.getManifest().version;
+
   const tr = (key: MessageKey) => t(settings.lang, key);
 
   type ActiveSource = 'mute' | 'page' | 'site' | 'default'
@@ -211,6 +213,7 @@
     </section>
 
     <footer>
+      <span class="ver">v{version}</span>
       <button class="link" onclick={openOptions}>{tr('openOptions')}</button>
     </footer>
   {:else}
@@ -542,7 +545,15 @@
     padding-top: 8px;
     border-top: 1px solid var(--line);
     display: flex;
-    justify-content: flex-end;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .ver {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    color: var(--ink-dim);
+    padding: 2px 4px;
   }
   .link {
     border: none;
