@@ -1,10 +1,10 @@
 import { pathKeyOf } from '../core/url';
 
-export function setupUrlTracking(onChange: () => void): void {
-  let currentPath = pathKeyOf(location.href);
+export function setupUrlTracking(onChange: () => void, getUrl: () => string = () => location.href): void {
+  let currentPath = pathKeyOf(getUrl());
 
   const check = () => {
-    const p = pathKeyOf(location.href);
+    const p = pathKeyOf(getUrl());
     if (p !== currentPath) {
       currentPath = p;
       onChange();

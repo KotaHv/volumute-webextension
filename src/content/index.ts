@@ -4,8 +4,17 @@ import { AudioController, hookMediaElements } from "./audio";
 import { setupUrlTracking } from "./routing";
 import { pageVolumesStore, siteVolumesStore } from "../storage/stores";
 
-const hostname = hostnameOf(location.href);
-let currentPath = pathKeyOf(location.href);
+function topUrl(): string {
+  try {
+    if (window.top && window.top !== window) return window.top.location.href;
+  } catch {
+    /* cross-origin iframe: fall back to this frame's URL */
+  }
+  return location.href;
+}
+
+const hostname = hostnameOf(topUrl());
+let currentPath = pathKeyOf(topUrl());
 
 const controller = new AudioController();
 hookMediaElements(controller);
@@ -60,14 +69,14 @@ function applyVolume(touch: boolean): void {
 }
 
 function onUrlChanged(): void {
-  const p = pathKeyOf(location.href);
+  const p = pathKeyOf(topUrl());
   if (p !== currentPath) {
     currentPath = p;
     applyVolume(true);
   }
 }
 
-setupUrlTracking(onUrlChanged);
+setupUrlTracking(onUrlChanged, topUrl);
 
 async function init(): Promise<void> {
   await Promise.all([pageVolumesStore.init(), siteVolumesStore.init()]);
