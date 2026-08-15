@@ -34,19 +34,19 @@ describe('mergeUnion', () => {
 describe('mergeFresh', () => {
   it('propagates deletions from disk (no resurrection)', () => {
     const cache = { a: mute(100), b: mute(50) };
-    const out = mergeFresh(mergeByLastWrite, cache, {});
+    const out = mergeFresh(cache, {});
     expect(Object.keys(out)).toHaveLength(0);
   });
 
   it('keeps local entry when its timestamp is newer', () => {
     const cache = { a: mute(100) };
-    const out = mergeFresh(mergeByLastWrite, cache, { a: mute(40) });
+    const out = mergeFresh(cache, { a: mute(40) });
     expect(out.a?.lastUsed).toBe(100);
   });
 
   it('takes the fresh entry when it is newer', () => {
     const cache = { a: mute(40) };
-    const out = mergeFresh(mergeByLastWrite, cache, { a: mute(100) });
+    const out = mergeFresh(cache, { a: mute(100) });
     expect(out.a?.lastUsed).toBe(100);
   });
 });

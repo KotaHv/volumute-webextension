@@ -54,7 +54,6 @@ export class KVStore<T extends TimedEntry> {
     const versionKey = schemaVersionKey(this.key);
     const stored = await area.get([this.key, versionKey]);
     let data = mergeFresh(
-      this.merge,
       {},
       (stored[this.key] ?? {}) as EntryMap<T> | undefined,
     );
@@ -93,7 +92,7 @@ export class KVStore<T extends TimedEntry> {
       const change = changes[this.key];
       if (!change) return;
       const fresh = (change.newValue ?? {}) as EntryMap<T> | undefined;
-      this.cache = mergeFresh(this.merge, this.cache, fresh);
+      this.cache = mergeFresh(this.cache, fresh);
       this.emit();
     });
   }
@@ -106,7 +105,7 @@ export class KVStore<T extends TimedEntry> {
     if (!this.loaded) return this.init();
     const fresh = ((await browser.storage[this.area].get(this.key))[this.key] ??
       {}) as EntryMap<T> | undefined;
-    this.cache = mergeFresh(this.merge, this.cache, fresh);
+    this.cache = mergeFresh(this.cache, fresh);
     this.emit();
   }
 
@@ -161,7 +160,7 @@ export class KVStore<T extends TimedEntry> {
         const now = Date.now();
         entry.lastUsed = now;
         await area.set({ [this.key]: map });
-        this.cache = mergeFresh(this.merge, this.cache, map);
+        this.cache = mergeFresh(this.cache, map);
         this.emit();
       } catch (err) {
         console.warn(
@@ -265,7 +264,6 @@ export function mergeUnion<T extends TimedEntry>(
 }
 
 export function mergeFresh<T extends TimedEntry>(
-  merge: (cache: EntryMap<T>, fresh: EntryMap<T> | undefined) => EntryMap<T>,
   cache: EntryMap<T>,
   fresh: EntryMap<T> | undefined,
 ): EntryMap<T> {
