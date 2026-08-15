@@ -37,6 +37,7 @@ export default {
   noEntries: 'No entries',
   siteHostname: 'Site',
   siteLastUsed: 'Last used',
+  created: 'Created',
   volumeMultiplier: 'Volume multiplier',
   pageUrl: 'Page',
   muteEnabled: 'Muted',

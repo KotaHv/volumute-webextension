@@ -8,9 +8,9 @@ export function computeMultiplier(
   hostname: string,
 ): number {
   const page = pageVolumes[path]
-  if (page) return clamp(page.v)
+  if (page) return clamp(page.multiplier)
   const site = siteVolumes[hostname]
-  if (site) return clamp(site.v)
+  if (site) return clamp(site.multiplier)
   return DEFAULT_MULTIPLIER
 }
 

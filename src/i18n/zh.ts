@@ -37,6 +37,7 @@ export default {
   noEntries: '暂无条目',
   siteHostname: '网站',
   siteLastUsed: '最后使用',
+  created: '创建',
   volumeMultiplier: '音量倍数',
   pageUrl: '页面',
   muteEnabled: '已静音',

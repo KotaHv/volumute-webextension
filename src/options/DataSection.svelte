@@ -55,7 +55,7 @@
             <input type="checkbox" checked={selected.has(row.key)} onchange={() => toggle(row.key)} />
           {/if}
           <div class="cell">
-            <div class="cell-main">{row.value}</div>
+            <div class="cell-main" title={row.value}>{row.value}</div>
             <div class="cell-sub">{row.sub}</div>
           </div>
         </div>
@@ -149,9 +149,9 @@
     font-size: 10px;
     color: var(--ink-dim);
     margin-top: 1px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    line-height: 1.45;
+    white-space: normal;
+    word-break: break-all;
   }
   .actions {
     margin-top: 10px;

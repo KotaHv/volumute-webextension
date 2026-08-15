@@ -1,12 +1,15 @@
-export interface MuteEntry {
+export interface EntryBase {
+  created: number
+  lastUsed: number
+}
+
+export interface MuteEntry extends EntryBase {
   enabled: boolean
-  ts: number
   deviceId: string
 }
 
-export interface VolumeEntry {
-  v: number
-  t: number
+export interface VolumeEntry extends EntryBase {
+  multiplier: number
 }
 
 export type Lang = 'auto' | 'zh' | 'en'

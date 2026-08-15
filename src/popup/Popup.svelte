@@ -47,20 +47,20 @@
     muted = autoMutedStore.snapshot()[h]?.enabled === true
     const sv = siteVolumesStore.snapshot()
     hasSiteVol = !!sv[h]
-    siteVol = sv[h]?.v ?? 1
+    siteVol = sv[h]?.multiplier ?? 1
     const pv = pageVolumesStore.snapshot()
     hasPageVol = !!pv[p]
-    pageVol = pv[p]?.v ?? 1
+    pageVol = pv[p]?.multiplier ?? 1
     autoMutedStore.onChange((m) => {
       muted = m[hostname]?.enabled === true
     })
     siteVolumesStore.onChange((m) => {
       hasSiteVol = !!m[hostname]
-      siteVol = m[hostname]?.v ?? 1
+      siteVol = m[hostname]?.multiplier ?? 1
     })
     pageVolumesStore.onChange((m) => {
       hasPageVol = !!m[path]
-      pageVol = m[path]?.v ?? 1
+      pageVol = m[path]?.multiplier ?? 1
     })
   })
 
@@ -70,7 +70,7 @@
     await autoMutedStore.update(
       (m) => {
         const next = { ...m }
-        if (checked) next[hostname] = { enabled: true, ts: now, deviceId }
+        if (checked) next[hostname] = { enabled: true, created: now, lastUsed: now, deviceId }
         else delete next[hostname]
         return next
       },
@@ -80,12 +80,20 @@
 
   function setPageVol(v: number): void {
     pageVol = v
-    void pageVolumesStore.update((m) => ({ ...m, [path]: { v, t: Date.now() } }))
+    const now = Date.now()
+    void pageVolumesStore.update((m) => {
+      const existing = m[path]
+      return { ...m, [path]: { multiplier: v, created: existing?.created ?? now, lastUsed: now } }
+    })
   }
 
   function setSiteVol(v: number): void {
     siteVol = v
-    void siteVolumesStore.update((m) => ({ ...m, [hostname]: { v, t: Date.now() } }))
+    const now = Date.now()
+    void siteVolumesStore.update((m) => {
+      const existing = m[hostname]
+      return { ...m, [hostname]: { multiplier: v, created: existing?.created ?? now, lastUsed: now } }
+    })
   }
 
   function flushSliders(): void {

@@ -5,7 +5,8 @@
   import { getSettings, subscribeSettings, updateSettings } from '../storage/settings'
   import { currentLang, setCurrentLang, tr } from '../i18n/svelte'
   import { applyTheme } from '../theme'
-  import { DATA_VERSION } from '../core/constants'
+  import { DATA_VERSION, MIN_SUPPORTED_VERSION } from '../core/constants'
+  import { MUTE_MIGRATIONS, VOLUME_MIGRATIONS, migrateMap } from '../core/migrate'
   import type { MuteMap, PageVolumeMap, Settings, SiteVolumeMap, ThemeMode, Lang } from '../core/types'
 
   type Tab = 'sites' | 'data' | 'settings'
@@ -35,14 +36,14 @@
   const muteRows = $derived(Object.entries(muteMap).map(([host, e]) => ({
     key: host,
     value: host,
-    sub: `${tr('muteEnabled', $currentLang)} · ${fmt(e.ts)}`,
+    sub: `${tr('muteEnabled', $currentLang)} · ${tr('created', $currentLang)}: ${fmt(e.created)} · ${tr('siteLastUsed', $currentLang)}: ${fmt(e.lastUsed)}`,
   })))
 
   const siteRows = $derived(
     Object.entries(siteMap).map(([host, e]) => ({
       key: host,
       value: host,
-      sub: `${tr('volumeMultiplier', $currentLang)}: ${pct(e.v)} · ${tr('siteLastUsed', $currentLang)}: ${fmt(e.t)}`,
+      sub: `${tr('volumeMultiplier', $currentLang)}: ${pct(e.multiplier)} · ${tr('created', $currentLang)}: ${fmt(e.created)} · ${tr('siteLastUsed', $currentLang)}: ${fmt(e.lastUsed)}`,
     })),
   )
 
@@ -50,7 +51,7 @@
     Object.entries(pageMap).map(([url, e]) => ({
       key: url,
       value: url,
-      sub: `${tr('volumeMultiplier', $currentLang)}: ${pct(e.v)} · ${tr('siteLastUsed', $currentLang)}: ${fmt(e.t)}`,
+      sub: `${tr('volumeMultiplier', $currentLang)}: ${pct(e.multiplier)} · ${tr('created', $currentLang)}: ${fmt(e.created)} · ${tr('siteLastUsed', $currentLang)}: ${fmt(e.lastUsed)}`,
     })),
   )
 
@@ -121,10 +122,9 @@
 
   function exportData(): void {
     const payload = {
-      version: DATA_VERSION,
       exportedAt: Date.now(),
-      sync: { autoMuted: muteMap },
-      local: { siteVolumes: siteMap, pageVolumes: pageMap },
+      sync: { version: DATA_VERSION, autoMuted: muteMap },
+      local: { version: DATA_VERSION, siteVolumes: siteMap, pageVolumes: pageMap },
     }
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
@@ -135,22 +135,48 @@
     URL.revokeObjectURL(url)
   }
 
+  function prepareSection<T>(
+    version: number | undefined,
+    data: T | undefined,
+    migrations: Record<number, (map: T) => T>,
+  ): T | null {
+    if (version === undefined || version < MIN_SUPPORTED_VERSION || version > DATA_VERSION) return null
+    return migrateMap(migrations, (data ?? {}) as T, version, DATA_VERSION)
+  }
+
   async function importData(): Promise<void> {
     const file = fileInput?.files?.[0]
     if (!file) return
     try {
-      const payload = JSON.parse(await file.text()) as {
+      const raw = JSON.parse(await file.text()) as {
         version?: number
-        sync?: { autoMuted?: MuteMap }
-        local?: { siteVolumes?: SiteVolumeMap; pageVolumes?: PageVolumeMap }
+        exportedAt?: number
+        sync?: { version?: number; autoMuted?: MuteMap } | MuteMap
+        local?:
+          | { version?: number; siteVolumes?: SiteVolumeMap; pageVolumes?: PageVolumeMap }
+          | { siteVolumes?: SiteVolumeMap; pageVolumes?: PageVolumeMap }
       }
-      if (payload.version !== DATA_VERSION) {
-        statusMsg = `${tr('importFail', $currentLang)}: version ${String(payload.version)}`
+      // Legacy export ({ version, sync: {...}, local: {...} }): lift the
+      // top-level version into each section.
+      const legacyTop = typeof raw.version === 'number'
+      const syncRaw = legacyTop
+        ? { version: raw.version, autoMuted: (raw.sync as MuteMap | undefined) ?? {} }
+        : (raw.sync as { version?: number; autoMuted?: MuteMap } | undefined)
+      const localRaw = legacyTop
+        ? {
+            version: raw.version,
+            siteVolumes: ((raw.local as { siteVolumes?: SiteVolumeMap } | undefined)?.siteVolumes ?? {}),
+            pageVolumes: ((raw.local as { pageVolumes?: PageVolumeMap } | undefined)?.pageVolumes ?? {}),
+          }
+        : (raw.local as { version?: number; siteVolumes?: SiteVolumeMap; pageVolumes?: PageVolumeMap } | undefined)
+
+      const impMute = prepareSection(syncRaw?.version, syncRaw?.autoMuted, MUTE_MIGRATIONS)
+      const impSite = prepareSection(localRaw?.version, localRaw?.siteVolumes, VOLUME_MIGRATIONS)
+      const impPage = prepareSection(localRaw?.version, localRaw?.pageVolumes, VOLUME_MIGRATIONS)
+      if (impMute === null || impSite === null || impPage === null) {
+        statusMsg = tr('importFail', $currentLang)
         return
       }
-      const impMute = payload.sync?.autoMuted ?? {}
-      const impSite = payload.local?.siteVolumes ?? {}
-      const impPage = payload.local?.pageVolumes ?? {}
       if (importMode === 'overwrite') {
         await autoMutedStore.update(() => ({ ...impMute }))
         await siteVolumesStore.update(() => ({ ...impSite }))
@@ -160,7 +186,8 @@
           const next = { ...c }
           for (const [k, v] of Object.entries(impMute)) {
             const cur = next[k]
-            if (!cur || v.ts > cur.ts) next[k] = v
+            const lastUsed = (v as { lastUsed?: number }).lastUsed ?? 0
+            if (!cur || lastUsed > ((cur as { lastUsed?: number }).lastUsed ?? 0)) next[k] = v
           }
           return next
         })
