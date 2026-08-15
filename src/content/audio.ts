@@ -122,7 +122,16 @@ export function hookMediaElements(controller: AudioController): void {
 
   if (document.documentElement) scan();
 
-  const observer = new MutationObserver(() => scan());
+  const observer = new MutationObserver((mutations) => {
+    for (const m of mutations) {
+      for (const node of m.addedNodes) {
+        if (node instanceof HTMLMediaElement) wrap(node);
+        else if (node instanceof Element) {
+          for (const el of node.querySelectorAll('video, audio')) wrap(el);
+        }
+      }
+    }
+  });
   try {
     observer.observe(document.documentElement ?? document, {
       childList: true,
@@ -132,6 +141,6 @@ export function hookMediaElements(controller: AudioController): void {
     /* ignore */
   }
 
-  document.addEventListener('play', (e) => wrap(e.target as Element), true);
   window.addEventListener('load', scan);
 }
+
