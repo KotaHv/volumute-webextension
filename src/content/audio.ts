@@ -7,6 +7,9 @@ function buildRoute(ctx: AudioContext): GainNode {
   const gain = ctx.createGain();
   gain.gain.value = currentVolume;
   ORIG_CONNECT.call(gain, ctx.destination);
+  ctx.addEventListener('statechange', () => {
+    if (ctx.state === 'closed') routes.delete(ctx);
+  });
   return gain;
 }
 
@@ -21,7 +24,11 @@ function routeFor(ctx: AudioContext): GainNode {
 
 export function setAllVolume(volume: number): void {
   currentVolume = volume;
-  for (const gain of routes.values()) {
+  for (const [ctx, gain] of routes) {
+    if (ctx.state === 'closed') {
+      routes.delete(ctx);
+      continue;
+    }
     try {
       const ctxTime = gain.context.currentTime;
       const param = gain.gain;
