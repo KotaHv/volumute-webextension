@@ -60,6 +60,7 @@ export class AudioController {
   private ctx: AudioContext | null = null;
   private wrapped = new WeakSet<HTMLMediaElement>();
   private suspended: boolean | null = null;
+  private captured = 0;
 
   private ensure(): boolean {
     if (this.ctx) return true;
@@ -76,13 +77,14 @@ export class AudioController {
   }
 
   setVolume(volume: number): void {
-    if (!this.ensure()) return;
     if (volume === 0) {
       this.suspended = true;
       void this.ctx?.suspend();
     } else {
       this.suspended = false;
-      void this.ctx?.resume();
+      if (this.captured > 0 && this.ensure()) {
+        void this.ctx?.resume();
+      }
     }
     setAllVolume(volume);
   }
@@ -95,6 +97,7 @@ export class AudioController {
       const src = this.ctx.createMediaElementSource(el);
       const route = routeFor(this.ctx);
       ORIG_CONNECT.call(src as AudioNode, route as AudioNode);
+      this.captured++;
       console.log('[VoluMute] media element captured');
       const resume = () => {
         try {
