@@ -1,6 +1,5 @@
 import browser from "webextension-polyfill";
 import { hostnameOf, pathKeyOf } from "../core/url";
-import type { PageVolumeMap, SiteVolumeMap } from "../core/types";
 import { AudioController, hookMediaElements } from "./audio";
 import { setupUrlTracking } from "./routing";
 import { pageVolumesStore, siteVolumesStore } from "../storage/stores";
@@ -17,19 +16,15 @@ browser.runtime.onMessage.addListener((msg: unknown) => {
   if (!m || m.type !== "vm:mute-state") return;
   console.log("[VoluMute] mute-state received", m.muted);
   isMuted = m.muted ?? false;
-  void applyVolume(false);
+  applyVolume(false);
 });
 
 // `touch` is true only when the page itself was visited (load / URL change).
 // Storage-change driven re-applications must NOT touch: our own writes would
 // otherwise bounce between tabs via onChanged (write loop).
-async function applyVolume(touch: boolean): Promise<void> {
-  const stored = await browser.storage.local.get([
-    "pageVolumes",
-    "siteVolumes",
-  ]);
-  const pageVolumes = (stored.pageVolumes ?? {}) as PageVolumeMap;
-  const siteVolumes = (stored.siteVolumes ?? {}) as SiteVolumeMap;
+function applyVolume(touch: boolean): void {
+  const pageVolumes = pageVolumesStore.snapshot();
+  const siteVolumes = siteVolumesStore.snapshot();
 
   let volume = 1;
   let used: "page" | "site" | null = null;
@@ -58,27 +53,26 @@ async function applyVolume(touch: boolean): Promise<void> {
   controller.setVolume(volume);
   if (!touch || isMuted) return;
   if (used === "page" && currentPath) {
-    pageVolumesStore.touchEntry(currentPath);
+    void pageVolumesStore.touchEntry(currentPath);
   } else if (used === "site" && hostname) {
-    siteVolumesStore.touchEntry(hostname);
+    void siteVolumesStore.touchEntry(hostname);
   }
 }
-
-void applyVolume(true);
-
-browser.storage.local.onChanged.addListener((changes) => {
-  if (changes.pageVolumes || changes.siteVolumes) {
-    void applyVolume(false);
-  }
-});
 
 function onUrlChanged(): void {
   const p = pathKeyOf(location.href);
   if (p !== currentPath) {
     currentPath = p;
-void initMuteState();
+    applyVolume(true);
+  }
+}
 
-async function initMuteState(): Promise<void> {
+setupUrlTracking(onUrlChanged);
+
+async function init(): Promise<void> {
+  await Promise.all([pageVolumesStore.init(), siteVolumesStore.init()]);
+  pageVolumesStore.onChange(() => applyVolume(false));
+  siteVolumesStore.onChange(() => applyVolume(false));
   try {
     const res = (await browser.runtime.sendMessage({
       type: "vm:mute-query",
@@ -87,9 +81,7 @@ async function initMuteState(): Promise<void> {
   } catch {
     /* bg not ready yet; the startup reapply push will correct us */
   }
-  await applyVolume(true);
-}
-  }
+  applyVolume(true);
 }
 
-setupUrlTracking(onUrlChanged);
+void init();
