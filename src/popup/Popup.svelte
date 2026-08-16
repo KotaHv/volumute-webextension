@@ -471,6 +471,7 @@
     left: 2px;
     width: 20px;
     height: 20px;
+    box-sizing: border-box;
     border-radius: 50%;
     background: var(--surface-2);
     border: 1px solid var(--line);
