@@ -8,16 +8,21 @@
   import { applyTheme } from '../theme';
   import { DATA_VERSION, MIN_SUPPORTED_VERSION, displayVersion } from '../core/constants';
   import { MUTE_MIGRATIONS, VOLUME_MIGRATIONS, migrateMap } from '../core/migrate';
-  import type { MuteMap, PageVolumeMap, Settings, SiteVolumeMap, ThemeMode, Lang } from '../core/types';
+  import type {
+    MuteMap,
+    PageVolumeMap,
+    Settings,
+    SiteVolumeMap,
+    ThemeMode,
+    Lang,
+  } from '../core/types';
 
-  type Tab = 'sites' | 'data' | 'settings'
+  type Tab = 'sites' | 'data' | 'settings';
   let tab = $state<Tab>('sites');
   let settings = $state<Settings>({ lang: 'auto', theme: 'auto' });
 
   const version = displayVersion(browser.runtime.getManifest().version);
-  const versionLabel = __BUILD_STAMP__
-    ? `v${version} · ${__BUILD_STAMP__}`
-    : `v${version}`;
+  const versionLabel = __BUILD_STAMP__ ? `v${version} · ${__BUILD_STAMP__}` : `v${version}`;
 
   let muteMap = $state<MuteMap>({});
   let siteMap = $state<SiteVolumeMap>({});
@@ -52,11 +57,13 @@
     return `${Math.round(v * 100)}%`;
   }
 
-  const muteRows = $derived(Object.entries(muteMap).map(([host, e]) => ({
-    key: host,
-    value: host,
-    sub: `${tr('muteEnabled', $currentLang)} · ${tr('created', $currentLang)}: ${fmt(e.created)} · ${tr('siteLastUsed', $currentLang)}: ${fmt(e.lastUsed)}`,
-  })));
+  const muteRows = $derived(
+    Object.entries(muteMap).map(([host, e]) => ({
+      key: host,
+      value: host,
+      sub: `${tr('muteEnabled', $currentLang)} · ${tr('created', $currentLang)}: ${fmt(e.created)} · ${tr('siteLastUsed', $currentLang)}: ${fmt(e.lastUsed)}`,
+    })),
+  );
 
   const siteRows = $derived(
     Object.entries(siteMap).map(([host, e]) => ({
@@ -156,9 +163,15 @@
     const payload = {
       exportedAt: Date.now(),
       sync: { version: DATA_VERSION, autoMuted: muteMap },
-      local: { version: DATA_VERSION, siteVolumes: siteMap, pageVolumes: pageMap },
+      local: {
+        version: DATA_VERSION,
+        siteVolumes: siteMap,
+        pageVolumes: pageMap,
+      },
     };
-    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const blob = new Blob([JSON.stringify(payload, null, 2)], {
+      type: 'application/json',
+    });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -172,7 +185,8 @@
     data: T | undefined,
     migrations: Record<number, (map: T) => T>,
   ): T | null {
-    if (version === undefined || version < MIN_SUPPORTED_VERSION || version > DATA_VERSION) return null;
+    if (version === undefined || version < MIN_SUPPORTED_VERSION || version > DATA_VERSION)
+      return null;
     return migrateMap(migrations, (data ?? {}) as T, version, DATA_VERSION);
   }
 
@@ -181,26 +195,41 @@
     if (!file) return;
     try {
       const raw = JSON.parse(await file.text()) as {
-        version?: number
-        exportedAt?: number
-        sync?: { version?: number; autoMuted?: MuteMap } | MuteMap
+        version?: number;
+        exportedAt?: number;
+        sync?: { version?: number; autoMuted?: MuteMap } | MuteMap;
         local?:
-          | { version?: number; siteVolumes?: SiteVolumeMap; pageVolumes?: PageVolumeMap }
-          | { siteVolumes?: SiteVolumeMap; pageVolumes?: PageVolumeMap }
+          | {
+              version?: number;
+              siteVolumes?: SiteVolumeMap;
+              pageVolumes?: PageVolumeMap;
+            }
+          | { siteVolumes?: SiteVolumeMap; pageVolumes?: PageVolumeMap };
       };
       // Legacy export ({ version, sync: {...}, local: {...} }): lift the
       // top-level version into each section.
       const legacyTop = typeof raw.version === 'number';
       const syncRaw = legacyTop
-        ? { version: raw.version, autoMuted: (raw.sync as MuteMap | undefined) ?? {} }
+        ? {
+            version: raw.version,
+            autoMuted: (raw.sync as MuteMap | undefined) ?? {},
+          }
         : (raw.sync as { version?: number; autoMuted?: MuteMap } | undefined);
       const localRaw = legacyTop
         ? {
             version: raw.version,
-            siteVolumes: ((raw.local as { siteVolumes?: SiteVolumeMap } | undefined)?.siteVolumes ?? {}),
-            pageVolumes: ((raw.local as { pageVolumes?: PageVolumeMap } | undefined)?.pageVolumes ?? {}),
+            siteVolumes:
+              (raw.local as { siteVolumes?: SiteVolumeMap } | undefined)?.siteVolumes ?? {},
+            pageVolumes:
+              (raw.local as { pageVolumes?: PageVolumeMap } | undefined)?.pageVolumes ?? {},
           }
-        : (raw.local as { version?: number; siteVolumes?: SiteVolumeMap; pageVolumes?: PageVolumeMap } | undefined);
+        : (raw.local as
+            | {
+                version?: number;
+                siteVolumes?: SiteVolumeMap;
+                pageVolumes?: PageVolumeMap;
+              }
+            | undefined);
 
       const impMute = prepareSection(syncRaw?.version, syncRaw?.autoMuted, MUTE_MIGRATIONS);
       const impSite = prepareSection(localRaw?.version, localRaw?.siteVolumes, VOLUME_MIGRATIONS);
@@ -249,9 +278,15 @@
       <span class="ver">{versionLabel}</span>
     </div>
     <nav>
-      <button class:active={tab === 'sites'} onclick={() => (tab = 'sites')}>{tr('tabSiteList', $currentLang)}</button>
-      <button class:active={tab === 'data'} onclick={() => (tab = 'data')}>{tr('tabData', $currentLang)}</button>
-      <button class:active={tab === 'settings'} onclick={() => (tab = 'settings')}>{tr('tabSettings', $currentLang)}</button>
+      <button class:active={tab === 'sites'} onclick={() => (tab = 'sites')}
+        >{tr('tabSiteList', $currentLang)}</button
+      >
+      <button class:active={tab === 'data'} onclick={() => (tab = 'data')}
+        >{tr('tabData', $currentLang)}</button
+      >
+      <button class:active={tab === 'settings'} onclick={() => (tab = 'settings')}
+        >{tr('tabSettings', $currentLang)}</button
+      >
     </nav>
   </header>
 
@@ -282,12 +317,39 @@
   {:else if tab === 'data'}
     <div class="quota">
       <span class="quota-head">{tr('quotaUsage', $currentLang)}</span>
-      <span class="quota-item">{tr('autoMute', $currentLang)} (sync): <b>{syncBytes}</b> {tr('quotaBytes', $currentLang)} · <b>{Object.keys(muteMap).length}</b> {tr('quotaItems', $currentLang)}</span>
-      <span class="quota-item">{tr('siteVolume', $currentLang)}/{tr('pageVolume', $currentLang)} (local): <b>{localBytes}</b> {tr('quotaBytes', $currentLang)} · <b>{Object.keys(siteMap).length + Object.keys(pageMap).length}</b> {tr('quotaItems', $currentLang)}</span>
+      <span class="quota-item"
+        >{tr('autoMute', $currentLang)} (sync): <b>{syncBytes}</b>
+        {tr('quotaBytes', $currentLang)} · <b>{Object.keys(muteMap).length}</b>
+        {tr('quotaItems', $currentLang)}</span
+      >
+      <span class="quota-item"
+        >{tr('siteVolume', $currentLang)}/{tr('pageVolume', $currentLang)} (local):
+        <b>{localBytes}</b>
+        {tr('quotaBytes', $currentLang)} ·
+        <b>{Object.keys(siteMap).length + Object.keys(pageMap).length}</b>
+        {tr('quotaItems', $currentLang)}</span
+      >
     </div>
     <div class="io">
-      <button class="icon-btn" class:refreshing={refreshing} aria-busy={refreshing} onclick={refresh} title={tr('refresh', $currentLang)}>
-        <svg class:spinning={refreshing} class="icon" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+      <button
+        class="icon-btn"
+        class:refreshing
+        aria-busy={refreshing}
+        onclick={refresh}
+        title={tr('refresh', $currentLang)}
+      >
+        <svg
+          class:spinning={refreshing}
+          class="icon"
+          viewBox="0 0 24 24"
+          width="12"
+          height="12"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.6"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
           <path d="M21 12a9 9 0 1 1-2.64-6.36" />
           <path d="M21 3v6h-6" />
         </svg>
@@ -303,7 +365,13 @@
         {tr('importOverwrite', $currentLang)}
       </label>
       <button onclick={() => fileInput?.click()}>{tr('importData', $currentLang)}</button>
-      <input type="file" accept="application/json" bind:this={fileInput} hidden onchange={importData} />
+      <input
+        type="file"
+        accept="application/json"
+        bind:this={fileInput}
+        hidden
+        onchange={importData}
+      />
       {#if statusMsg}
         <span class="status" class:ok={statusOk}>{statusMsg}</span>
       {/if}
@@ -335,15 +403,67 @@
     <div class="settings">
       <section>
         <h3>{tr('language', $currentLang)}</h3>
-        <label><input type="radio" name="lang" value="auto" checked={settings.lang === 'auto'} onchange={() => setLang('auto')} /> {tr('langAuto', $currentLang)}</label>
-        <label><input type="radio" name="lang" value="zh" checked={settings.lang === 'zh'} onchange={() => setLang('zh')} /> 中文</label>
-        <label><input type="radio" name="lang" value="en" checked={settings.lang === 'en'} onchange={() => setLang('en')} /> English</label>
+        <label
+          ><input
+            type="radio"
+            name="lang"
+            value="auto"
+            checked={settings.lang === 'auto'}
+            onchange={() => setLang('auto')}
+          />
+          {tr('langAuto', $currentLang)}</label
+        >
+        <label
+          ><input
+            type="radio"
+            name="lang"
+            value="zh"
+            checked={settings.lang === 'zh'}
+            onchange={() => setLang('zh')}
+          /> 中文</label
+        >
+        <label
+          ><input
+            type="radio"
+            name="lang"
+            value="en"
+            checked={settings.lang === 'en'}
+            onchange={() => setLang('en')}
+          /> English</label
+        >
       </section>
       <section>
         <h3>{tr('theme', $currentLang)}</h3>
-        <label><input type="radio" name="theme" value="auto" checked={settings.theme === 'auto'} onchange={() => setTheme('auto')} /> {tr('themeAuto', $currentLang)}</label>
-        <label><input type="radio" name="theme" value="light" checked={settings.theme === 'light'} onchange={() => setTheme('light')} /> {tr('themeLight', $currentLang)}</label>
-        <label><input type="radio" name="theme" value="dark" checked={settings.theme === 'dark'} onchange={() => setTheme('dark')} /> {tr('themeDark', $currentLang)}</label>
+        <label
+          ><input
+            type="radio"
+            name="theme"
+            value="auto"
+            checked={settings.theme === 'auto'}
+            onchange={() => setTheme('auto')}
+          />
+          {tr('themeAuto', $currentLang)}</label
+        >
+        <label
+          ><input
+            type="radio"
+            name="theme"
+            value="light"
+            checked={settings.theme === 'light'}
+            onchange={() => setTheme('light')}
+          />
+          {tr('themeLight', $currentLang)}</label
+        >
+        <label
+          ><input
+            type="radio"
+            name="theme"
+            value="dark"
+            checked={settings.theme === 'dark'}
+            onchange={() => setTheme('dark')}
+          />
+          {tr('themeDark', $currentLang)}</label
+        >
       </section>
     </div>
   {/if}

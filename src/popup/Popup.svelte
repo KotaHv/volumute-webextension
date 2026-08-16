@@ -22,14 +22,14 @@
   let hasSiteVol = $state(false);
 
   const version = displayVersion(browser.runtime.getManifest().version);
-  const versionLabel = __BUILD_STAMP__
-    ? `v${version} · ${__BUILD_STAMP__}`
-    : `v${version}`;
+  const versionLabel = __BUILD_STAMP__ ? `v${version} · ${__BUILD_STAMP__}` : `v${version}`;
 
   const tr = (key: MessageKey) => t(settings.lang, key);
 
-  type ActiveSource = 'mute' | 'page' | 'site' | 'default'
-  const activeSource: ActiveSource = $derived(muted ? 'mute' : hasPageVol ? 'page' : hasSiteVol ? 'site' : 'default');
+  type ActiveSource = 'mute' | 'page' | 'site' | 'default';
+  const activeSource: ActiveSource = $derived(
+    muted ? 'mute' : hasPageVol ? 'page' : hasSiteVol ? 'site' : 'default',
+  );
 
   onMount(async () => {
     settings = await getSettings();
@@ -38,7 +38,10 @@
       settings = s;
       applyTheme(s.theme);
     });
-    const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
+    const [tab] = await browser.tabs.query({
+      active: true,
+      currentWindow: true,
+    });
     if (!tab?.url) {
       tabTitle = tr('currentTabNotFound');
       return;
@@ -76,7 +79,13 @@
     await autoMutedStore.update(
       (m) => {
         const next = { ...m };
-        if (checked) next[hostname] = { enabled: true, created: now, lastUsed: now, deviceId };
+        if (checked)
+          next[hostname] = {
+            enabled: true,
+            created: now,
+            lastUsed: now,
+            deviceId,
+          };
         else delete next[hostname];
         return next;
       },
@@ -89,7 +98,14 @@
     const now = Date.now();
     void pageVolumesStore.update((m) => {
       const existing = m[path];
-      return { ...m, [path]: { multiplier: v, created: existing?.created ?? now, lastUsed: now } };
+      return {
+        ...m,
+        [path]: {
+          multiplier: v,
+          created: existing?.created ?? now,
+          lastUsed: now,
+        },
+      };
     });
   }
 
@@ -98,7 +114,14 @@
     const now = Date.now();
     void siteVolumesStore.update((m) => {
       const existing = m[hostname];
-      return { ...m, [hostname]: { multiplier: v, created: existing?.created ?? now, lastUsed: now } };
+      return {
+        ...m,
+        [hostname]: {
+          multiplier: v,
+          created: existing?.created ?? now,
+          lastUsed: now,
+        },
+      };
     });
   }
 
@@ -111,7 +134,6 @@
     void browser.runtime.openOptionsPage();
     window.close();
   }
-
 
   function clearPageVol(): void {
     void pageVolumesStore.update((m) => {
@@ -158,7 +180,11 @@
         <span class="ch-state" class:on={muted}>{muted ? tr('enabled') : tr('disabled')}</span>
       </div>
       <label class="switch">
-        <input type="checkbox" checked={muted} onchange={(e) => toggleMute((e.target as HTMLInputElement).checked)} />
+        <input
+          type="checkbox"
+          checked={muted}
+          onchange={(e) => toggleMute((e.target as HTMLInputElement).checked)}
+        />
         <span class="switch-track"><span class="switch-thumb"></span></span>
       </label>
       <p class="ch-sub">{tr('autoMuteDesc')}</p>
@@ -168,9 +194,11 @@
       <div class="ch-head">
         <span class="indicator" class:page={!muted && activeSource === 'page'}></span>
         <span class="ch-label">{tr('pageVolume')}</span>
-        <span class="led" class:led-dim={muted}>{Math.round(pageVol * 100)}<span class="pct">%</span></span>
+        <span class="led" class:led-dim={muted}
+          >{Math.round(pageVol * 100)}<span class="pct">%</span></span
+        >
       </div>
-      <div class="fader" style={`--val: ${pageVol / MAX_MULTIPLIER * 100}%`}>
+      <div class="fader" style={`--val: ${(pageVol / MAX_MULTIPLIER) * 100}%`}>
         <input
           type="range"
           min="0"
@@ -185,7 +213,9 @@
       <div class="ch-foot">
         <span class="ch-sub">{tr('pageVolumeDesc')}</span>
         {#if hasPageVol}
-          <button class="clear" onclick={clearPageVol} disabled={muted} title={tr('delete')}>×</button>
+          <button class="clear" onclick={clearPageVol} disabled={muted} title={tr('delete')}
+            >×</button
+          >
         {/if}
       </div>
     </section>
@@ -194,9 +224,11 @@
       <div class="ch-head">
         <span class="indicator" class:on-site={!muted && activeSource === 'site'}></span>
         <span class="ch-label">{tr('siteVolume')}</span>
-        <span class="led" class:led-dim={muted}>{Math.round(siteVol * 100)}<span class="pct">%</span></span>
+        <span class="led" class:led-dim={muted}
+          >{Math.round(siteVol * 100)}<span class="pct">%</span></span
+        >
       </div>
-      <div class="fader" style={`--val: ${siteVol / MAX_MULTIPLIER * 100}%`}>
+      <div class="fader" style={`--val: ${(siteVol / MAX_MULTIPLIER) * 100}%`}>
         <input
           type="range"
           min="0"
@@ -211,7 +243,9 @@
       <div class="ch-foot">
         <span class="ch-sub">{tr('siteName')}: {hostname}</span>
         {#if hasSiteVol}
-          <button class="clear" onclick={clearSiteVol} disabled={muted} title={tr('delete')}>×</button>
+          <button class="clear" onclick={clearSiteVol} disabled={muted} title={tr('delete')}
+            >×</button
+          >
         {/if}
       </div>
     </section>
@@ -321,7 +355,9 @@
     border-radius: 50%;
     background: var(--line);
     box-shadow: var(--glow);
-    transition: background 0.2s, box-shadow 0.2s;
+    transition:
+      background 0.2s,
+      box-shadow 0.2s;
   }
   .power.on {
     background: var(--green);
@@ -412,7 +448,9 @@
     background: var(--line);
     box-shadow: var(--glow);
     flex-shrink: 0;
-    transition: background 0.2s, box-shadow 0.2s;
+    transition:
+      background 0.2s,
+      box-shadow 0.2s;
   }
   .indicator.page {
     background: var(--green);
@@ -581,7 +619,10 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .power, .indicator, .switch-track, .switch-thumb {
+    .power,
+    .indicator,
+    .switch-track,
+    .switch-thumb {
       transition: none;
     }
   }

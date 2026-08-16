@@ -3,9 +3,9 @@
   import { currentLang, tr } from '../i18n/svelte';
 
   interface Row {
-    key: string
-    value: string
-    sub: string
+    key: string;
+    value: string;
+    sub: string;
   }
 
   let {
@@ -16,12 +16,12 @@
     onDelete = () => {},
     selectable = true,
   }: {
-    title: string
-    rows: Row[]
-    emptyText: string
-    selected?: Set<string>
-    onDelete?: () => void
-    selectable?: boolean
+    title: string;
+    rows: Row[];
+    emptyText: string;
+    selected?: Set<string>;
+    onDelete?: () => void;
+    selectable?: boolean;
   } = $props();
 
   let confirming = $state(false);
@@ -78,7 +78,11 @@
       {#each rows as row (row.key)}
         <div class="row" class:checked={selectable && selected.has(row.key)}>
           {#if selectable}
-            <input type="checkbox" checked={selected.has(row.key)} onchange={() => toggle(row.key)} />
+            <input
+              type="checkbox"
+              checked={selected.has(row.key)}
+              onchange={() => toggle(row.key)}
+            />
           {/if}
           <div class="cell">
             <div class="cell-main" title={row.value}>{row.value}</div>
@@ -89,7 +93,9 @@
     </div>
     {#if selectable}
       <div class="actions">
-        <button onclick={toggleAll}>{allSelected ? tr('selectNone', $currentLang) : tr('selectAll', $currentLang)}</button>
+        <button onclick={toggleAll}
+          >{allSelected ? tr('selectNone', $currentLang) : tr('selectAll', $currentLang)}</button
+        >
         <button class="danger" onclick={openConfirm} disabled={selected.size === 0}>
           {tr('deleteSelected', $currentLang)} ({selected.size})
         </button>
@@ -119,7 +125,9 @@
         </p>
         <div class="dialog-actions">
           <button bind:this={cancelBtn} onclick={closeConfirm}>{tr('cancel', $currentLang)}</button>
-          <button class="danger" onclick={confirmDelete}>{tr('deleteSelected', $currentLang)}</button>
+          <button class="danger" onclick={confirmDelete}
+            >{tr('deleteSelected', $currentLang)}</button
+          >
         </div>
       </div>
     </div>
