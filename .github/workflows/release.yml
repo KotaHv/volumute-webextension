@@ -142,6 +142,7 @@ jobs:
         if: ${{ steps.versions.outputs.mode == 'unlisted' }}
         uses: softprops/action-gh-release@v3
         with:
+          prerelease: true
           files: |
             dist/volumute-chrome.zip
             dist/signed/*.xpi
