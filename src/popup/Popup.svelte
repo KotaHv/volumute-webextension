@@ -6,6 +6,7 @@
   import { t } from '../i18n';
   import { applyTheme } from '../theme';
   import { hostnameOf, pathKeyOf } from '../core/url';
+  import { displayVersion } from '../core/constants';
   import { MAX_MULTIPLIER } from '../core/types';
   import type { MessageKey } from '../i18n';
   import type { Settings } from '../core/types';
@@ -20,7 +21,7 @@
   let hasPageVol = $state(false);
   let hasSiteVol = $state(false);
 
-  const version = browser.runtime.getManifest().version;
+  const version = displayVersion(browser.runtime.getManifest().version);
   const versionLabel = __BUILD_STAMP__
     ? `v${version} · ${__BUILD_STAMP__}`
     : `v${version}`;

@@ -6,7 +6,7 @@
   import { getSettings, subscribeSettings, updateSettings } from '../storage/settings';
   import { currentLang, setCurrentLang, tr } from '../i18n/svelte';
   import { applyTheme } from '../theme';
-  import { DATA_VERSION, MIN_SUPPORTED_VERSION } from '../core/constants';
+  import { DATA_VERSION, MIN_SUPPORTED_VERSION, displayVersion } from '../core/constants';
   import { MUTE_MIGRATIONS, VOLUME_MIGRATIONS, migrateMap } from '../core/migrate';
   import type { MuteMap, PageVolumeMap, Settings, SiteVolumeMap, ThemeMode, Lang } from '../core/types';
 
@@ -14,7 +14,7 @@
   let tab = $state<Tab>('sites');
   let settings = $state<Settings>({ lang: 'auto', theme: 'auto' });
 
-  const version = browser.runtime.getManifest().version;
+  const version = displayVersion(browser.runtime.getManifest().version);
   const versionLabel = __BUILD_STAMP__
     ? `v${version} · ${__BUILD_STAMP__}`
     : `v${version}`;
