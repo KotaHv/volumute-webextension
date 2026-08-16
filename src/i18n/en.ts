@@ -18,6 +18,7 @@ export default {
   disabled: 'Disabled',
   delete: 'Delete',
   deleteSelected: 'Delete selected',
+  cancel: 'Cancel',
   selectAll: 'Select all',
   selectNone: 'Clear selection',
   exportData: 'Export',

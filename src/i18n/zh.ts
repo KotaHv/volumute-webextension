@@ -18,6 +18,7 @@ export default {
   disabled: '已关闭',
   delete: '删除',
   deleteSelected: '删除选中',
+  cancel: '取消',
   selectAll: '全选',
   selectNone: '取消全选',
   exportData: '导出',

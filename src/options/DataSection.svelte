@@ -24,6 +24,13 @@
     selectable?: boolean
   } = $props();
 
+  let confirming = $state(false);
+  let cancelBtn: HTMLButtonElement | null = $state(null);
+
+  $effect(() => {
+    if (confirming) cancelBtn?.focus();
+  });
+
   const allSelected = $derived(rows.length > 0 && rows.every((r) => selected.has(r.key)));
 
   function toggleAll(): void {
@@ -38,7 +45,26 @@
     if (selected.has(key)) selected.delete(key);
     else selected.add(key);
   }
+
+  function openConfirm(): void {
+    confirming = true;
+  }
+
+  function closeConfirm(): void {
+    confirming = false;
+  }
+
+  function confirmDelete(): void {
+    confirming = false;
+    onDelete();
+  }
+
+  function handleKeydown(e: KeyboardEvent): void {
+    if (confirming && e.key === 'Escape') confirming = false;
+  }
 </script>
+
+<svelte:window onkeydown={handleKeydown} />
 
 <section class="section">
   <div class="head">
@@ -64,11 +90,39 @@
     {#if selectable}
       <div class="actions">
         <button onclick={toggleAll}>{allSelected ? tr('selectNone', $currentLang) : tr('selectAll', $currentLang)}</button>
-        <button class="danger" onclick={() => onDelete()} disabled={selected.size === 0}>
+        <button class="danger" onclick={openConfirm} disabled={selected.size === 0}>
           {tr('deleteSelected', $currentLang)} ({selected.size})
         </button>
       </div>
     {/if}
+  {/if}
+
+  {#if confirming}
+    <div
+      class="overlay"
+      role="presentation"
+      onclick={(e) => {
+        if (e.target === e.currentTarget) closeConfirm();
+      }}
+    >
+      <div
+        class="dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="confirm-title"
+        tabindex="-1"
+      >
+        <h4 id="confirm-title">{title}</h4>
+        <p>
+          {tr('confirmDeleteSelected', $currentLang)}
+          <span class="n">({selected.size})</span>
+        </p>
+        <div class="dialog-actions">
+          <button bind:this={cancelBtn} onclick={closeConfirm}>{tr('cancel', $currentLang)}</button>
+          <button class="danger" onclick={confirmDelete}>{tr('deleteSelected', $currentLang)}</button>
+        </div>
+      </div>
+    </div>
   {/if}
 </section>
 
@@ -158,6 +212,48 @@
     display: flex;
     gap: 8px;
     justify-content: flex-end;
+  }
+  .overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.45);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 50;
+  }
+  .dialog {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 16px;
+    min-width: 260px;
+    max-width: 90vw;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.25);
+  }
+  .dialog h4 {
+    margin: 0 0 8px;
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ink-dim);
+  }
+  .dialog p {
+    margin: 0;
+    font-size: 13px;
+    color: var(--ink);
+  }
+  .dialog .n {
+    color: var(--ink-dim);
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+  .dialog-actions {
+    margin-top: 14px;
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
   }
   button {
     font-size: 11px;
