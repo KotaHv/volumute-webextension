@@ -80,6 +80,10 @@ jobs:
         env:
           VOLUMUTE_RELEASE: "1"
 
+      - name: Package source code
+        if: ${{ steps.versions.outputs.mode == 'full' }}
+        run: git archive --format=zip -o dist/volumute-source.zip HEAD
+
       - name: Submit Firefox version to AMO (listed)
         # Submit to the listed channel and return immediately: the listed
         # review is followed up in the AMO Developer Hub, so do not wait.
@@ -89,6 +93,7 @@ jobs:
             --channel=listed \
             --approval-timeout=0 \
             --source-dir dist/firefox \
+            --upload-source-code dist/volumute-source.zip \
             --api-key "$WEB_EXT_API_KEY" \
             --api-secret "$WEB_EXT_API_SECRET"
         env:
