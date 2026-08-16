@@ -43,19 +43,12 @@ jobs:
         id: versions
         run: |
           TAG="${GITHUB_REF_NAME#v}"
-          # AMO only accepts numeric dotted versions, 1-4 segments, no leading zeros.
           if ! [[ "$TAG" =~ ^(0|[1-9][0-9]{0,8})(\.(0|[1-9][0-9]{0,8})){0,3}$ ]]; then
             echo "::error::Tag '${GITHUB_REF_NAME}' does not map to a valid AMO version ('${TAG}')."
             exit 1
           fi
           PKG_VER="$(node -p "require('./package.json').version")"
           SEGMENTS="$(awk -F. '{print NF}' <<< "$TAG")"
-          # AMO requires version numbers to be unique across channels, so the
-          # unlisted companion bumps the 4th segment. A 4-segment tag is an
-          # unlisted-only release whose version is the tag itself; it must
-          # extend the package.json version. Note: a full release tag (e.g.
-          # v0.1.4) consumes unlisted 0.1.4.1, so subsequent unlisted-only
-          # tags must start from 0.1.4.2.
           if [ "$SEGMENTS" -eq 4 ]; then
             MODE="unlisted"
             UNLISTED="$TAG"
@@ -85,8 +78,6 @@ jobs:
         run: git archive --format=zip -o dist/volumute-source.zip HEAD
 
       - name: Submit Firefox version to AMO (listed)
-        # Submit to the listed channel and return immediately: the listed
-        # review is followed up in the AMO Developer Hub, so do not wait.
         if: ${{ steps.versions.outputs.mode == 'full' }}
         run: |
           pnpm exec web-ext sign \
@@ -101,9 +92,6 @@ jobs:
           WEB_EXT_API_SECRET: ${{ secrets.WEB_EXT_API_SECRET }}
 
       - name: Build unlisted Firefox package
-        # Builds dist/firefox with the unlisted version. In full mode this
-        # rebuilds after the listed zip was archived; calling vite directly
-        # (not scripts/build.js) keeps that zip intact.
         run: pnpm exec vite build
         env:
           VOLUMUTE_TARGET: firefox
@@ -111,17 +99,29 @@ jobs:
           VOLUMUTE_VERSION: ${{ steps.versions.outputs.unlisted }}
 
       - name: Build Chrome package (unlisted-only)
-        # Chrome is not on the CWS; the zip is distributed for load-unpacked
-        # installs. Full mode already built the Chrome zip with pnpm build.
         if: ${{ steps.versions.outputs.mode == 'unlisted' }}
         run: pnpm build:chrome
         env:
           VOLUMUTE_RELEASE: "1"
           VOLUMUTE_VERSION: ${{ steps.versions.outputs.unlisted }}
 
+      - name: Create Release (full)
+        if: ${{ steps.versions.outputs.mode == 'full' }}
+        uses: softprops/action-gh-release@v3
+        with:
+          files: |
+            dist/volumute-chrome.zip
+            dist/volumute-firefox.zip
+
+      - name: Create Release (unlisted-only)
+        if: ${{ steps.versions.outputs.mode == 'unlisted' }}
+        uses: softprops/action-gh-release@v3
+        with:
+          prerelease: true
+          files: |
+            dist/volumute-chrome.zip
+
       - name: Sign unlisted version on AMO
-        # Unlisted versions are usually auto-signed within minutes; wait for
-        # the signed XPI so it can be attached to the release.
         run: |
           pnpm exec web-ext sign \
             --channel=unlisted \
@@ -134,20 +134,9 @@ jobs:
           WEB_EXT_API_KEY: ${{ secrets.WEB_EXT_API_KEY }}
           WEB_EXT_API_SECRET: ${{ secrets.WEB_EXT_API_SECRET }}
 
-      - name: Create Release (full)
-        if: ${{ steps.versions.outputs.mode == 'full' }}
+      - name: Attach unlisted XPI to Release
         uses: softprops/action-gh-release@v3
         with:
+          prerelease: ${{ steps.versions.outputs.mode == 'unlisted' }}
           files: |
-            dist/volumute-chrome.zip
-            dist/volumute-firefox.zip
-            dist/signed/*.xpi
-
-      - name: Create Release (unlisted-only)
-        if: ${{ steps.versions.outputs.mode == 'unlisted' }}
-        uses: softprops/action-gh-release@v3
-        with:
-          prerelease: true
-          files: |
-            dist/volumute-chrome.zip
             dist/signed/*.xpi
