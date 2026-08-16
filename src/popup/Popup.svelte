@@ -135,7 +135,16 @@
     window.close();
   }
 
+  const RESET_ANIM_MS = 400;
+  let pageResetting = $state(false);
+  let siteResetting = $state(false);
+
   function clearPageVol(): void {
+    if (pageResetting) return;
+    pageResetting = true;
+    setTimeout(() => {
+      pageResetting = false;
+    }, RESET_ANIM_MS);
     void pageVolumesStore.update((m) => {
       const next = { ...m };
       delete next[path];
@@ -144,6 +153,11 @@
   }
 
   function clearSiteVol(): void {
+    if (siteResetting) return;
+    siteResetting = true;
+    setTimeout(() => {
+      siteResetting = false;
+    }, RESET_ANIM_MS);
     void siteVolumesStore.update((m) => {
       const next = { ...m };
       delete next[hostname];
@@ -187,13 +201,34 @@
         />
         <span class="switch-track"><span class="switch-thumb"></span></span>
       </label>
-      <p class="ch-sub">{tr('autoMuteDesc')}</p>
     </section>
 
     <section class="strip" class:strip-off={muted}>
       <div class="ch-head">
         <span class="indicator" class:page={!muted && activeSource === 'page'}></span>
         <span class="ch-label">{tr('pageVolume')}</span>
+        <button
+          class="clear"
+          class:resetting={pageResetting}
+          onclick={clearPageVol}
+          disabled={muted}
+          title={tr('resetVolume')}
+          style:visibility={hasPageVol || pageResetting ? 'visible' : 'hidden'}
+        >
+          <svg
+            viewBox="0 0 24 24"
+            width="12"
+            height="12"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2.2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <polyline points="1 4 1 10 7 10" />
+            <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
+          </svg>
+        </button>
         <span class="led" class:led-dim={muted}
           >{Math.round(pageVol * 100)}<span class="pct">%</span></span
         >
@@ -210,20 +245,34 @@
           onchange={flushSliders}
         />
       </div>
-      <div class="ch-foot">
-        <span class="ch-sub">{tr('pageVolumeDesc')}</span>
-        {#if hasPageVol}
-          <button class="clear" onclick={clearPageVol} disabled={muted} title={tr('delete')}
-            >×</button
-          >
-        {/if}
-      </div>
     </section>
 
     <section class="strip" class:strip-off={muted}>
       <div class="ch-head">
         <span class="indicator" class:on-site={!muted && activeSource === 'site'}></span>
         <span class="ch-label">{tr('siteVolume')}</span>
+        <button
+          class="clear"
+          class:resetting={siteResetting}
+          onclick={clearSiteVol}
+          disabled={muted}
+          title={tr('resetVolume')}
+          style:visibility={hasSiteVol || siteResetting ? 'visible' : 'hidden'}
+        >
+          <svg
+            viewBox="0 0 24 24"
+            width="12"
+            height="12"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2.2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <polyline points="1 4 1 10 7 10" />
+            <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
+          </svg>
+        </button>
         <span class="led" class:led-dim={muted}
           >{Math.round(siteVol * 100)}<span class="pct">%</span></span
         >
@@ -239,14 +288,6 @@
           oninput={(e) => setSiteVol(Number((e.target as HTMLInputElement).value))}
           onchange={flushSliders}
         />
-      </div>
-      <div class="ch-foot">
-        <span class="ch-sub">{tr('siteName')}: {hostname}</span>
-        {#if hasSiteVol}
-          <button class="clear" onclick={clearSiteVol} disabled={muted} title={tr('delete')}
-            >×</button
-          >
-        {/if}
       </div>
     </section>
 
@@ -420,7 +461,6 @@
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: var(--ink-dim);
-    flex: 1;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -430,15 +470,10 @@
     font-size: 10px;
     letter-spacing: 0.1em;
     color: var(--ink-dim);
+    margin-left: auto;
   }
   .ch-state.on {
     color: var(--red);
-  }
-  .ch-sub {
-    margin: 8px 0 0;
-    font-size: 11px;
-    line-height: 1.4;
-    color: var(--ink-dim);
   }
 
   .indicator {
@@ -475,6 +510,7 @@
     font-variant-numeric: tabular-nums;
     min-width: 52px;
     text-align: right;
+    margin-left: auto;
   }
   .led-dim {
     color: var(--ink-dim);
@@ -557,22 +593,18 @@
     outline: 2px solid var(--amber);
   }
 
-  .ch-foot {
-    margin-top: 8px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-  }
   .clear {
+    display: inline-flex;
+    align-items: center;
     border: 1px solid transparent;
     background: transparent;
     color: var(--ink-dim);
-    font-size: 14px;
     line-height: 1;
     cursor: pointer;
-    padding: 3px 6px;
+    padding: 3px 5px;
     border-radius: 4px;
+    flex-shrink: 0;
+    margin-left: -5px;
   }
   .clear:hover {
     color: var(--ink);
@@ -581,6 +613,22 @@
   .clear:disabled {
     opacity: 0.4;
     cursor: not-allowed;
+  }
+  .clear.resetting {
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.15s ease 0.2s;
+  }
+  .clear.resetting svg {
+    animation: reset-spin 0.3s ease;
+  }
+  @keyframes reset-spin {
+    from {
+      transform: rotate(0deg);
+    }
+    to {
+      transform: rotate(-360deg);
+    }
   }
 
   footer {
@@ -623,6 +671,12 @@
     .indicator,
     .switch-track,
     .switch-thumb {
+      transition: none;
+    }
+    .clear.resetting svg {
+      animation: none;
+    }
+    .clear.resetting {
       transition: none;
     }
   }

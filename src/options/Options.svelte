@@ -17,7 +17,7 @@
     Lang,
   } from '../core/types';
 
-  type Tab = 'sites' | 'data' | 'settings';
+  type Tab = 'sites' | 'data' | 'settings' | 'help';
   let tab = $state<Tab>('sites');
   let settings = $state<Settings>({ lang: 'auto', theme: 'auto' });
 
@@ -287,6 +287,9 @@
       <button class:active={tab === 'settings'} onclick={() => (tab = 'settings')}
         >{tr('tabSettings', $currentLang)}</button
       >
+      <button class:active={tab === 'help'} onclick={() => (tab = 'help')}
+        >{tr('tabHelp', $currentLang)}</button
+      >
     </nav>
   </header>
 
@@ -399,7 +402,7 @@
         onDelete={deletePages}
       />
     </div>
-  {:else}
+  {:else if tab === 'settings'}
     <div class="settings">
       <section>
         <h3>{tr('language', $currentLang)}</h3>
@@ -464,6 +467,25 @@
           />
           {tr('themeDark', $currentLang)}</label
         >
+      </section>
+    </div>
+  {:else}
+    <div class="help">
+      <section>
+        <h3>{tr('autoMute', $currentLang)}</h3>
+        <p>{tr('autoMuteDesc', $currentLang)}</p>
+      </section>
+      <section>
+        <h3>{tr('pageVolume', $currentLang)}</h3>
+        <p>{tr('pageVolumeDesc', $currentLang)}</p>
+      </section>
+      <section>
+        <h3>{tr('siteVolume', $currentLang)}</h3>
+        <p>{tr('siteVolumeDesc', $currentLang)}</p>
+      </section>
+      <section>
+        <h3>{tr('priority', $currentLang)}</h3>
+        <p>{tr('helpPriority', $currentLang)}</p>
       </section>
     </div>
   {/if}
@@ -729,5 +751,34 @@
   }
   .settings input[type='radio'] {
     accent-color: var(--amber);
+  }
+
+  .help {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .help section {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+  }
+  .help h3 {
+    margin: 0 0 4px;
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ink);
+  }
+  .help p {
+    margin: 0;
+    font-size: 13px;
+    color: var(--ink-dim);
+    line-height: 1.5;
   }
 </style>
