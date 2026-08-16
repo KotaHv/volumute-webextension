@@ -3,7 +3,7 @@ import en from './en';
 
 export type MessageKey = keyof typeof en
 
-export type Messages = Record<MessageKey, string>
+type Messages = Record<MessageKey, string>
 
 export const messages: Record<'zh' | 'en', Messages> = { zh, en };
 
