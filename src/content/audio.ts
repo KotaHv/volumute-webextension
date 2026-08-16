@@ -1,15 +1,10 @@
-const GAINS_KEY = '__volumute_gains__';
 const ROUTED_KEY = '__volumute_routed__';
+const GAIN_KEY = '__volumute_gain__';
 
 type ConnectFn = (...args: unknown[]) => unknown;
 type AnyRecord = Record<string, unknown>;
 
-// The gains registry lives on the window wrapper: Firefox reuses the same
-// content-script global scope across extension reloads, so a new instance
-// keeps controlling gains created by a previous one.
-const win = window as unknown as AnyRecord;
-
-// The page's real object (Firefox): the only place where a marker survives
+// The page's real object (Firefox): the only place where markers survive
 // extension reloads, since Xray wrapper expandos do not pass through.
 function pageMark(el: HTMLMediaElement): AnyRecord | undefined {
   return (el as unknown as { wrappedJSObject?: AnyRecord }).wrappedJSObject;
@@ -20,39 +15,39 @@ function isRouted(el: HTMLMediaElement): boolean {
   return real ? real[ROUTED_KEY] === true : false;
 }
 
+// Unwrap to the underlying page object so identity checks work across
+// realms (an Xray wrapper and the raw object are not ===).
+function unwrap<T>(obj: T): T {
+  const real = (obj as unknown as { wrappedJSObject?: T }).wrappedJSObject;
+  return (real ?? obj) as T;
+}
+
 let currentVolume = 1;
 
-function gainRegistry(): Set<GainNode> {
-  let gains = win[GAINS_KEY] as Set<GainNode> | undefined;
-  if (!gains) {
-    gains = new Set<GainNode>();
-    win[GAINS_KEY] = gains;
-  }
-  return gains;
-}
+// Per-realm registry: only this instance's own gains plus gains adopted
+// from already-routed media elements after an extension reload.
+const gains = new Set<GainNode>();
 
 // Content scripts cannot assign functions to page objects (Xray vision), so
 // this is always the pristine native connect in every instance.
 const ORIG_CONNECT = AudioNode.prototype.connect as unknown as ConnectFn;
 
-// One shared gain per AudioContext: after an extension reload the new content
-// script finds the existing node in the window registry instead of stacking
-// another layer into the audio graph.
+// One shared gain per AudioContext.
 function buildRoute(ctx: AudioContext): GainNode {
   const gain = ctx.createGain();
   gain.gain.value = currentVolume;
   ORIG_CONNECT.call(gain, ctx.destination);
-  gainRegistry().add(gain);
+  gains.add(gain);
   ctx.addEventListener('statechange', () => {
-    if (ctx.state === 'closed') gainRegistry().delete(gain);
+    if (ctx.state === 'closed') gains.delete(gain);
   });
   return gain;
 }
 
 function routeFor(ctx: AudioContext): GainNode {
-  const gains = gainRegistry();
+  const rawCtx = unwrap(ctx);
   for (const gain of gains) {
-    if (gain.context === ctx) {
+    if (unwrap(gain.context) === rawCtx) {
       if (ctx.state === 'closed') {
         gains.delete(gain);
         break;
@@ -65,7 +60,6 @@ function routeFor(ctx: AudioContext): GainNode {
 
 export function setAllVolume(volume: number): void {
   currentVolume = volume;
-  const gains = gainRegistry();
   for (const gain of gains) {
     if (gain.context.state === 'closed') {
       gains.delete(gain);
@@ -119,14 +113,26 @@ export class AudioController {
   wrapMediaElement(el: HTMLMediaElement): void {
     if (this.wrapped.has(el)) return;
     this.wrapped.add(el);
-    if (isRouted(el)) return;
+    if (isRouted(el)) {
+      // Routed by a previous extension instance: adopt its gain so volume
+      // changes keep reaching the existing audio path.
+      const real = pageMark(el);
+      const stored = real?.[GAIN_KEY];
+      if (stored && typeof stored === 'object' && 'gain' in stored) {
+        gains.add(stored as GainNode);
+      }
+      return;
+    }
     if (!this.ensure() || !this.ctx) return;
     try {
       const src = this.ctx.createMediaElementSource(el);
       const route = routeFor(this.ctx);
       ORIG_CONNECT.call(src as AudioNode, route as AudioNode);
       const real = pageMark(el);
-      if (real) real[ROUTED_KEY] = true;
+      if (real) {
+        real[ROUTED_KEY] = true;
+        real[GAIN_KEY] = unwrap(route);
+      }
       this.captured++;
       console.log('[VoluMute] media element captured');
       const resume = () => {
