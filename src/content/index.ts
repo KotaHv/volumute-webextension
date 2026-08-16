@@ -1,5 +1,6 @@
 import browser from "webextension-polyfill";
 import { hostnameOf, pathKeyOf } from "../core/url";
+import { computeMultiplier } from "../core/priority";
 import { setupUrlTracking } from "./routing";
 import { pageVolumesStore, siteVolumesStore } from "../storage/stores";
 
@@ -34,37 +35,16 @@ function applyVolume(touch: boolean): void {
   const pageVolumes = pageVolumesStore.snapshot();
   const siteVolumes = siteVolumesStore.snapshot();
 
-  let volume = 1;
-  let used: "page" | "site" | null = null;
-
-  if (currentPath) {
-    const pv = pageVolumes[currentPath];
-    if (pv) {
-      volume = pv.multiplier;
-      used = "page";
-    }
-  }
-  if (used === null && hostname) {
-    const sv = siteVolumes[hostname];
-    if (sv) {
-      volume = sv.multiplier;
-      used = "site";
-    }
-  }
-  volume = isMuted ? 0 : volume;
-  console.log("[VoluMute] applying volume", {
-    volume,
-    used,
-    currentPath,
-    hostname,
-  });
+  const volume = isMuted
+    ? 0
+    : computeMultiplier(pageVolumes, siteVolumes, currentPath ?? "", hostname ?? "");
   document.dispatchEvent(
     new CustomEvent("volumute:set-volume", { detail: { volume } }),
   );
   if (!touch || isMuted) return;
-  if (used === "page" && currentPath) {
+  if (currentPath && pageVolumes[currentPath]) {
     void pageVolumesStore.touchEntry(currentPath);
-  } else if (used === "site" && hostname) {
+  } else if (hostname && siteVolumes[hostname]) {
     void siteVolumesStore.touchEntry(hostname);
   }
 }
