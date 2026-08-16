@@ -1,6 +1,5 @@
 import browser from "webextension-polyfill";
 import { hostnameOf, pathKeyOf } from "../core/url";
-import { AudioController, hookMediaElements } from "./audio";
 import { setupUrlTracking } from "./routing";
 import { pageVolumesStore, siteVolumesStore } from "../storage/stores";
 
@@ -16,13 +15,13 @@ function topUrl(): string {
 const hostname = hostnameOf(topUrl());
 let currentPath = pathKeyOf(topUrl());
 
-const controller = new AudioController();
-hookMediaElements(controller);
 let isMuted = false;
 
-browser.runtime.onMessage.addListener((msg: unknown) => {
+browser.runtime.onMessage.addListener(async (msg: unknown) => {
   const m = msg as { type?: string; muted?: boolean } | undefined;
-  if (!m || m.type !== "vm:mute-state") return;
+  if (!m) return;
+  if (m.type === 'vm:ping') return { ok: true };
+  if (m.type !== "vm:mute-state") return;
   console.log("[VoluMute] mute-state received", m.muted);
   isMuted = m.muted ?? false;
   applyVolume(false);
@@ -59,7 +58,9 @@ function applyVolume(touch: boolean): void {
     currentPath,
     hostname,
   });
-  controller.setVolume(volume);
+  document.dispatchEvent(
+    new CustomEvent("volumute:set-volume", { detail: { volume } }),
+  );
   if (!touch || isMuted) return;
   if (used === "page" && currentPath) {
     void pageVolumesStore.touchEntry(currentPath);

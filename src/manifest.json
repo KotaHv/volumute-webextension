@@ -23,7 +23,8 @@
       "strict_min_version": "142.0"
     }
   },
-  "permissions": ["storage", "tabs"],
+  "permissions": ["storage", "tabs", "scripting"],
+  "host_permissions": ["<all_urls>"],
   "action": {
     "default_title": "VoluMute",
     "default_popup": "src/popup/popup.html",
@@ -42,10 +43,31 @@
     "page": "src/options/options.html",
     "open_in_tab": true
   },
-  "content_scripts": [
+  "{{chrome}}.content_scripts": [
     {
       "matches": ["<all_urls>", "file:///*"],
       "js": ["src/content/index.ts"],
+      "run_at": "document_start",
+      "all_frames": true
+    },
+    {
+      "matches": ["<all_urls>", "file:///*"],
+      "js": ["src/content/audio-main.ts"],
+      "run_at": "document_start",
+      "all_frames": true,
+      "world": "MAIN"
+    }
+  ],
+  "{{firefox}}.content_scripts": [
+    {
+      "matches": ["<all_urls>", "file:///*"],
+      "js": ["src/content/index.ts"],
+      "run_at": "document_start",
+      "all_frames": true
+    },
+    {
+      "matches": ["<all_urls>", "file:///*"],
+      "js": ["src/content/audio-main.ts"],
       "run_at": "document_start",
       "all_frames": true
     }
