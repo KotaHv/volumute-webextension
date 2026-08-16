@@ -19,6 +19,8 @@ export default {
   selectNone: 'Clear selection',
   exportData: 'Export',
   importData: 'Import',
+  refresh: 'Refresh',
+  refreshDone: 'Refreshed',
   importMerge: 'Merge',
   importOverwrite: 'Overwrite',
   language: 'Language',

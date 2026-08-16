@@ -29,7 +29,20 @@
 
   let importMode = $state<'merge' | 'overwrite'>('merge');
   let statusMsg = $state('');
+  let statusOk = $state(false);
+  let statusTimer: ReturnType<typeof setTimeout> | null = null;
   let fileInput = $state<HTMLInputElement | null>(null);
+
+  function showStatus(msg: string, ok = false, ms = 2500): void {
+    statusMsg = msg;
+    statusOk = ok;
+    if (statusTimer) clearTimeout(statusTimer);
+    statusTimer = setTimeout(() => {
+      statusMsg = '';
+      statusOk = false;
+      statusTimer = null;
+    }, ms);
+  }
 
   function fmt(ts: number): string {
     return new Date(ts).toLocaleString();
@@ -93,10 +106,23 @@
     });
   });
 
-  function refresh(): void {
-    void autoMutedStore.reload();
-    void siteVolumesStore.reload();
-    void pageVolumesStore.reload();
+  let refreshing = $state(false);
+
+  async function refresh(): Promise<void> {
+    if (refreshing) return;
+    refreshing = true;
+    const minDelay = new Promise((r) => setTimeout(r, 600));
+    try {
+      await Promise.all([
+        autoMutedStore.reload(),
+        siteVolumesStore.reload(),
+        pageVolumesStore.reload(),
+        minDelay,
+      ]);
+      showStatus(tr('refreshDone', $currentLang), true);
+    } finally {
+      refreshing = false;
+    }
   }
 
   async function deleteMutes(): Promise<void> {
@@ -180,7 +206,7 @@
       const impSite = prepareSection(localRaw?.version, localRaw?.siteVolumes, VOLUME_MIGRATIONS);
       const impPage = prepareSection(localRaw?.version, localRaw?.pageVolumes, VOLUME_MIGRATIONS);
       if (impMute === null || impSite === null || impPage === null) {
-        statusMsg = tr('importFail', $currentLang);
+        showStatus(tr('importFail', $currentLang), false, 4000);
         return;
       }
       if (importMode === 'overwrite') {
@@ -200,9 +226,9 @@
         await siteVolumesStore.update((c) => ({ ...impSite, ...c }));
         await pageVolumesStore.update((c) => ({ ...impPage, ...c }));
       }
-      statusMsg = tr('importSuccess', $currentLang);
+      showStatus(tr('importSuccess', $currentLang), true);
     } catch {
-      statusMsg = tr('importFail', $currentLang);
+      showStatus(tr('importFail', $currentLang), false, 4000);
     }
   }
 
@@ -260,7 +286,12 @@
       <span class="quota-item">{tr('siteVolume', $currentLang)}/{tr('pageVolume', $currentLang)} (local): <b>{localBytes}</b> {tr('quotaBytes', $currentLang)} · <b>{Object.keys(siteMap).length + Object.keys(pageMap).length}</b> {tr('quotaItems', $currentLang)}</span>
     </div>
     <div class="io">
-      <button onclick={refresh} title="refresh">⟳</button>
+      <button class="icon-btn" class:refreshing={refreshing} aria-busy={refreshing} onclick={refresh} title={tr('refresh', $currentLang)}>
+        <svg class:spinning={refreshing} class="icon" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 12a9 9 0 1 1-2.64-6.36" />
+          <path d="M21 3v6h-6" />
+        </svg>
+      </button>
       <button onclick={exportData}>{tr('exportData', $currentLang)}</button>
       <span class="io-sep"></span>
       <label>
@@ -274,7 +305,7 @@
       <button onclick={() => fileInput?.click()}>{tr('importData', $currentLang)}</button>
       <input type="file" accept="application/json" bind:this={fileInput} hidden onchange={importData} />
       {#if statusMsg}
-        <span class="status">{statusMsg}</span>
+        <span class="status" class:ok={statusOk}>{statusMsg}</span>
       {/if}
     </div>
     <div class="grid">
@@ -491,6 +522,37 @@
     border-color: var(--amber);
     color: var(--amber);
   }
+  .io .icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 6px 12px;
+  }
+  .io .icon-btn.refreshing {
+    border-color: var(--amber);
+    color: var(--amber);
+    animation: io-pulse 0.6s ease-in-out infinite;
+  }
+  .io .icon {
+    display: block;
+  }
+  .io .icon.spinning {
+    animation: io-spin 0.7s linear infinite;
+  }
+  @keyframes io-spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+  @keyframes io-pulse {
+    0%,
+    100% {
+      transform: scale(1);
+    }
+    50% {
+      transform: scale(1.12);
+    }
+  }
   .io-sep {
     width: 1px;
     height: 16px;
@@ -510,6 +572,9 @@
   .status {
     color: var(--amber);
     font-size: 12px;
+  }
+  .status.ok {
+    color: var(--green);
   }
 
   .settings {

@@ -19,6 +19,8 @@ export default {
   selectNone: '取消全选',
   exportData: '导出',
   importData: '导入',
+  refresh: '刷新',
+  refreshDone: '已刷新',
   importMerge: '合并',
   importOverwrite: '覆盖',
   language: '语言',
