@@ -82,6 +82,10 @@ export class AudioController {
   private wrapped = new WeakSet<HTMLMediaElement>();
   private suspended: boolean | null = null;
   private captured = 0;
+  // Contexts adopted from a previous extension instance (media already
+  // routed): their suspend/resume state is unreachable otherwise, and a
+  // suspended context stays silent no matter what the gain says.
+  private adopted = new Set<AudioContext>();
 
   private ensure(): boolean {
     if (this.ctx) return true;
@@ -101,10 +105,14 @@ export class AudioController {
     if (volume === 0) {
       this.suspended = true;
       void this.ctx?.suspend();
+      for (const adopted of this.adopted) void adopted.suspend();
     } else {
       this.suspended = false;
       if (this.captured > 0 && this.ensure()) {
         void this.ctx?.resume();
+      }
+      for (const adopted of this.adopted) {
+        void adopted.resume().catch(() => {});
       }
     }
     setAllVolume(volume);
@@ -119,7 +127,9 @@ export class AudioController {
       const real = pageMark(el);
       const stored = real?.[GAIN_KEY];
       if (stored && typeof stored === 'object' && 'gain' in stored) {
-        gains.add(stored as GainNode);
+        const gain = stored as GainNode;
+        gains.add(gain);
+        this.adopted.add(unwrap(gain.context) as AudioContext);
       }
       return;
     }
