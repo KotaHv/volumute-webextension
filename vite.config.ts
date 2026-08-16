@@ -33,6 +33,7 @@ export default defineConfig({
   ],
   define: {
     __BUILD_STAMP__: JSON.stringify(stamp),
+    __BUILD_TARGET__: JSON.stringify(target),
   },
   build: {
     outDir: `dist/${target}`,

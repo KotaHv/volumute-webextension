@@ -5,14 +5,16 @@ type ConnectFn = (...args: unknown[]) => unknown;
 type AnyRecord = Record<string, unknown>;
 
 // The page's real object (Firefox): the only place where markers survive
-// extension reloads, since Xray wrapper expandos do not pass through.
-function pageMark(el: HTMLMediaElement): AnyRecord | undefined {
-  return (el as unknown as { wrappedJSObject?: AnyRecord }).wrappedJSObject;
+// extension reloads, since Xray wrapper expandos do not pass through. On
+// Chrome the audio script runs in the MAIN world, where the element is
+// already the page object.
+function pageMark(el: HTMLMediaElement): AnyRecord {
+  const real = (el as unknown as { wrappedJSObject?: AnyRecord }).wrappedJSObject;
+  return (real ?? el) as unknown as AnyRecord;
 }
 
 function isRouted(el: HTMLMediaElement): boolean {
-  const real = pageMark(el);
-  return real ? real[ROUTED_KEY] === true : false;
+  return pageMark(el)[ROUTED_KEY] === true;
 }
 
 // Unwrap to the underlying page object so identity checks work across
@@ -124,8 +126,7 @@ export class AudioController {
     if (isRouted(el)) {
       // Routed by a previous extension instance: adopt its gain so volume
       // changes keep reaching the existing audio path.
-      const real = pageMark(el);
-      const stored = real?.[GAIN_KEY];
+      const stored = pageMark(el)[GAIN_KEY];
       if (stored && typeof stored === 'object' && 'gain' in stored) {
         const gain = stored as GainNode;
         gains.add(gain);
@@ -139,10 +140,8 @@ export class AudioController {
       const route = routeFor(this.ctx);
       ORIG_CONNECT.call(src as AudioNode, route as AudioNode);
       const real = pageMark(el);
-      if (real) {
-        real[ROUTED_KEY] = true;
-        real[GAIN_KEY] = unwrap(route);
-      }
+      real[ROUTED_KEY] = true;
+      real[GAIN_KEY] = unwrap(route);
       this.captured++;
       console.log('[VoluMute] media element captured');
       const resume = () => {
@@ -156,6 +155,7 @@ export class AudioController {
     } catch (err) {
       /* element already captured by the page itself */
       console.warn('[VoluMute] media element capture failed:', err);
+      pageMark(el)[ROUTED_KEY] = true;
       if (this.captured === 0 && this.ctx) {
         void this.ctx.close();
         this.ctx = null;
