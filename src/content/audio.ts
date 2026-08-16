@@ -106,8 +106,6 @@ export class AudioController {
   setVolume(volume: number): void {
     if (volume === 0) {
       this.suspended = true;
-      void this.ctx?.suspend();
-      for (const adopted of this.adopted) void adopted.suspend();
     } else {
       this.suspended = false;
       if (this.captured > 0 && this.ensure()) {
