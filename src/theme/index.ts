@@ -12,9 +12,3 @@ export function applyTheme(mode: ThemeMode): void {
   document.documentElement.dataset.theme = theme;
 }
 
-export function watchTheme(mode: ThemeMode, onChange: (theme: 'light' | 'dark') => void): () => void {
-  if (mode !== 'auto' || !mql) return () => {};
-  const handler = () => onChange(mql.matches ? 'dark' : 'light');
-  mql.addEventListener('change', handler);
-  return () => mql.removeEventListener('change', handler);
-}
