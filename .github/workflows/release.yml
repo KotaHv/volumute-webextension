@@ -62,7 +62,7 @@ jobs:
               echo "::error::Tag version '${TAG}' does not match package.json version '${PKG_VER}'."
               exit 1
             fi
-            UNLISTED="${TAG}.1"
+            UNLISTED="${TAG}.0"
           fi
           echo "mode=${MODE}" >> "$GITHUB_OUTPUT"
           echo "unlisted=${UNLISTED}" >> "$GITHUB_OUTPUT"
@@ -133,6 +133,18 @@ jobs:
         env:
           WEB_EXT_API_KEY: ${{ secrets.WEB_EXT_API_KEY }}
           WEB_EXT_API_SECRET: ${{ secrets.WEB_EXT_API_SECRET }}
+
+      - name: Tag unlisted version
+        if: ${{ steps.versions.outputs.mode == 'full' }}
+        run: |
+          if git ls-remote --exit-code origin "refs/tags/v${UNLISTED}" >/dev/null 2>&1; then
+            echo "Tag v${UNLISTED} already exists, skipping."
+          else
+            git tag "v${UNLISTED}"
+            git push origin "v${UNLISTED}"
+          fi
+        env:
+          UNLISTED: ${{ steps.versions.outputs.unlisted }}
 
       - name: Attach unlisted XPI to Release
         uses: softprops/action-gh-release@v3
