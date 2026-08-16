@@ -39,10 +39,72 @@ jobs:
       - name: Test
         run: pnpm test
 
+      - name: Derive versions
+        id: versions
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          # AMO only accepts numeric dotted versions, 1-4 segments, no leading zeros.
+          if ! [[ "$TAG" =~ ^(0|[1-9][0-9]{0,8})(\.(0|[1-9][0-9]{0,8})){0,3}$ ]]; then
+            echo "::error::Tag '${GITHUB_REF_NAME}' does not map to a valid AMO version ('${TAG}')."
+            exit 1
+          fi
+          PKG_VER="$(node -p "require('./package.json').version")"
+          if [ "$TAG" != "$PKG_VER" ]; then
+            echo "::error::Tag version '${TAG}' does not match package.json version '${PKG_VER}'."
+            exit 1
+          fi
+          # AMO requires version numbers to be unique across channels, so the
+          # unlisted companion gets a bumped 4th segment: 0.1.3 -> 0.1.3.1,
+          # 0.1.3.4 -> 0.1.3.5.
+          if [[ "$TAG" == *.*.*.* ]]; then
+            UNLISTED="${TAG%.*}.$((${TAG##*.} + 1))"
+          else
+            UNLISTED="${TAG}.1"
+          fi
+          echo "unlisted=${UNLISTED}" >> "$GITHUB_OUTPUT"
+
       - name: Build extensions and packages
         run: pnpm build
         env:
           VOLUMUTE_RELEASE: "1"
+
+      - name: Submit Firefox version to AMO (listed)
+        # Submit to the listed channel and return immediately: the listed
+        # review is followed up in the AMO Developer Hub, so do not wait.
+        run: |
+          pnpm exec web-ext sign \
+            --channel=listed \
+            --approval-timeout=0 \
+            --source-dir dist/firefox \
+            --api-key "$WEB_EXT_API_KEY" \
+            --api-secret "$WEB_EXT_API_SECRET"
+        env:
+          WEB_EXT_API_KEY: ${{ secrets.WEB_EXT_API_KEY }}
+          WEB_EXT_API_SECRET: ${{ secrets.WEB_EXT_API_SECRET }}
+
+      - name: Build unlisted Firefox package
+        # Rebuild dist/firefox with the unlisted version. Calling vite directly
+        # (not scripts/build.js) keeps the listed zip produced above intact.
+        run: pnpm exec vite build
+        env:
+          VOLUMUTE_TARGET: firefox
+          VOLUMUTE_RELEASE: "1"
+          VOLUMUTE_VERSION: ${{ steps.versions.outputs.unlisted }}
+
+      - name: Sign unlisted version on AMO
+        # Unlisted versions are usually auto-signed within minutes; wait for
+        # the signed XPI so it can be attached to the release.
+        run: |
+          pnpm exec web-ext sign \
+            --channel=unlisted \
+            --approval-timeout=1800000 \
+            --source-dir dist/firefox \
+            --artifacts-dir dist/signed \
+            --api-key "$WEB_EXT_API_KEY" \
+            --api-secret "$WEB_EXT_API_SECRET"
+        env:
+          WEB_EXT_API_KEY: ${{ secrets.WEB_EXT_API_KEY }}
+          WEB_EXT_API_SECRET: ${{ secrets.WEB_EXT_API_SECRET }}
 
       - name: Create Release
         uses: softprops/action-gh-release@v3
@@ -50,3 +112,4 @@ jobs:
           files: |
             dist/volumute-chrome.zip
             dist/volumute-firefox.zip
+            dist/signed/*.xpi

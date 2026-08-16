@@ -19,7 +19,7 @@ function generateManifest(): Record<string, unknown> {
   const pkg = readJsonFile("package.json");
   return {
     ...manifest,
-    version: pkg.version,
+    version: process.env.VOLUMUTE_VERSION ?? pkg.version,
   };
 }
 
