@@ -78,42 +78,42 @@ async function reapplyAll(): Promise<void> {
   }
 }
 
-async function main(): Promise<void> {
-  await autoMutedStore.init();
-  browser.runtime.onMessage.addListener(
-    async (msg: unknown, sender: browser.Runtime.MessageSender) => {
-      const m = msg as { type?: string } | undefined;
-      if (!m || m.type !== "vm:mute-query") return;
-      const hostname = hostnameOf(sender.tab?.url ?? sender.url ?? "");
-      return {
-        muted: hostname !== null && isAutoMuted(autoMutedStore.snapshot(), hostname),
-      };
-    },
-  );
-  browser.tabs.onUpdated.addListener((_tabId, changeInfo, tab) => {
-    if (changeInfo.url || changeInfo.status === "loading")
-      void applyMuteToTab(tab);
-  });
-  browser.tabs.onActivated.addListener(({ tabId }) => {
-    void browser.tabs
-      .get(tabId)
-      .then(applyMuteToTab)
-      .catch(() => {});
-  });
+// Listeners must be registered synchronously at top level: on Firefox MV3 the
+// background is a suspendable event page (and on Chrome a short-lived service
+// worker), and a wake event is delivered right after the synchronous load
+// phase. Registering listeners after an await would drop the very event that
+// woke us. Handlers therefore await `ready` themselves before touching state.
+const ready = autoMutedStore.init();
 
-  browser.storage.sync.onChanged.addListener((changes) => {
-    if (changes.autoMuted) void reapplyAll();
-  });
+browser.runtime.onMessage.addListener(
+  async (msg: unknown, sender: browser.Runtime.MessageSender) => {
+    const m = msg as { type?: string } | undefined;
+    if (!m || m.type !== "vm:mute-query") return;
+    await ready;
+    const hostname = hostnameOf(sender.tab?.url ?? sender.url ?? "");
+    return {
+      muted: hostname !== null && isAutoMuted(autoMutedStore.snapshot(), hostname),
+    };
+  },
+);
+browser.tabs.onUpdated.addListener((_tabId, changeInfo, tab) => {
+  if (changeInfo.url || changeInfo.status === "loading")
+    void ready.then(() => applyMuteToTab(tab));
+});
+browser.tabs.onActivated.addListener(({ tabId }) => {
+  void ready
+    .then(() => browser.tabs.get(tabId))
+    .then(applyMuteToTab)
+    .catch(() => {});
+});
 
-  if (browser.runtime.onStartup) {
-    browser.runtime.onStartup.addListener(() => {
-      void reapplyAll();
-    });
-  }
-  void reapplyAll();
-  if (__BUILD_TARGET__ === 'chrome') {
-    void reinjectContentScripts();
-  }
+browser.storage.sync.onChanged.addListener((changes) => {
+  if (changes.autoMuted) void ready.then(reapplyAll);
+});
+
+void ready.then(reapplyAll);
+if (__BUILD_TARGET__ === 'chrome') {
+  void ready.then(reinjectContentScripts);
 }
 
 // Chrome reloads kill the service worker: content scripts in already-open
@@ -156,5 +156,3 @@ async function reinjectContentScripts(): Promise<void> {
     }
   }
 }
-
-void main();
