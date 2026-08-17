@@ -1,9 +1,11 @@
-import browser from "webextension-polyfill";
-import { hostnameOf } from "./core/url";
-import { isAutoMuted } from "./core/priority";
-import { autoMutedStore } from "./storage/stores";
+import browser from 'webextension-polyfill';
+import { hostnameOf } from './core/url';
+import { isAutoMuted } from './core/priority';
+import { autoMutedStore } from './storage/stores';
+import { clearUserMuteChoices, getUserMuteChoice, rememberUserMuteChoice } from './storage/session';
 
 const TOUCH_THROTTLE_MS = 10_000;
+
 // Capability probe: Firefox Android throws on tabs.update({muted}),
 // so the first natural attempt doubles as the detection.
 let tabMuteSupported: boolean | null = null;
@@ -27,7 +29,7 @@ function touch(hostname: string) {
 async function pushMuteState(tabId: number, muted: boolean): Promise<void> {
   try {
     await browser.tabs.sendMessage(tabId, {
-      type: "vm:mute-state",
+      type: 'vm:mute-state',
       muted,
     });
   } catch {
@@ -35,40 +37,25 @@ async function pushMuteState(tabId: number, muted: boolean): Promise<void> {
   }
 }
 
-async function applyMuteToTab(tab: browser.Tabs.Tab): Promise<void> {
+export async function applyMuteToTab(tab: browser.Tabs.Tab): Promise<void> {
   if (tab.id === undefined) return;
-  const hostname = hostnameOf(tab.url ?? tab.pendingUrl ?? "");
+  const hostname = hostnameOf(tab.url ?? tab.pendingUrl ?? '');
   if (!hostname) return;
-  const shouldMute = isAutoMuted(autoMutedStore.snapshot(), hostname);
   const isMuted = tab.mutedInfo?.muted ?? false;
+  const userChoice = await getUserMuteChoice(tab.id, hostname);
+  const shouldMute = userChoice ?? isAutoMuted(autoMutedStore.snapshot(), hostname);
 
-  if (shouldMute) {
-    if (isMuted) return;
-    if (tabMuteSupported === true) {
-      await setTabMuted(tab.id, true);
-    } else if (tabMuteSupported === false) {
-      await pushMuteState(tab.id, true);
-    } else {
-      await setTabMuted(tab.id, true);
-      if (tabMuteSupported === false) {
-        await pushMuteState(tab.id, true);
-      }
-    }
-    touch(hostname);
+  if (isMuted === shouldMute && tabMuteSupported === true) return;
+
+  if (tabMuteSupported === null) {
+    await setTabMuted(tab.id, shouldMute);
+    if (tabMuteSupported === false) await pushMuteState(tab.id, shouldMute);
+  } else if (tabMuteSupported === true) {
+    await setTabMuted(tab.id, shouldMute);
   } else {
-    if (tabMuteSupported === false) {
-      await pushMuteState(tab.id, false);
-    } else if (tabMuteSupported === true) {
-      if (isMuted && tab.mutedInfo?.reason === "extension") {
-        await setTabMuted(tab.id, false);
-      }
-    } else {
-      await setTabMuted(tab.id, false);
-      if (tabMuteSupported === false) {
-        await pushMuteState(tab.id, false);
-      }
-    }
+    await pushMuteState(tab.id, shouldMute);
   }
+  if (shouldMute) touch(hostname);
 }
 
 async function reapplyAll(): Promise<void> {
@@ -88,23 +75,31 @@ const ready = autoMutedStore.init();
 browser.runtime.onMessage.addListener(
   async (msg: unknown, sender: browser.Runtime.MessageSender) => {
     const m = msg as { type?: string } | undefined;
-    if (!m || m.type !== "vm:mute-query") return;
+    if (!m || m.type !== 'vm:mute-query') return;
     await ready;
-    const hostname = hostnameOf(sender.tab?.url ?? sender.url ?? "");
+    const hostname = hostnameOf(sender.tab?.url ?? sender.url ?? '');
     return {
       muted: hostname !== null && isAutoMuted(autoMutedStore.snapshot(), hostname),
     };
   },
 );
-browser.tabs.onUpdated.addListener((_tabId, changeInfo, tab) => {
-  if (changeInfo.url || changeInfo.status === "loading")
-    void ready.then(() => applyMuteToTab(tab));
+browser.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+  if (changeInfo.mutedInfo?.reason === 'user') {
+    const hostname = hostnameOf(tab.url ?? tab.pendingUrl ?? '');
+    if (hostname) {
+      void rememberUserMuteChoice(tabId, hostname, changeInfo.mutedInfo.muted).catch(() => {});
+    }
+  }
+  if (changeInfo.url || changeInfo.status === 'loading') void ready.then(() => applyMuteToTab(tab));
 });
 browser.tabs.onActivated.addListener(({ tabId }) => {
   void ready
     .then(() => browser.tabs.get(tabId))
     .then(applyMuteToTab)
     .catch(() => {});
+});
+browser.tabs.onRemoved.addListener((tabId) => {
+  void clearUserMuteChoices(tabId).catch(() => {});
 });
 
 browser.storage.sync.onChanged.addListener((changes) => {
