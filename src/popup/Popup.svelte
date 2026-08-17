@@ -109,14 +109,29 @@
     );
   }
 
-  function setPageVol(v: number): void {
-    pageVol = v;
+  // 100% == DEFAULT_MULTIPLIER (1): storing a no-op override is pointless and
+  // would keep a unity gain applied. At 100% the setting is cancelled instead —
+  // the entry is dropped from the store (page or site) so the effective volume
+  // falls back to the default.
+  function writeVolume(
+    store: typeof pageVolumesStore,
+    key: string,
+    v: number,
+  ): void {
+    if (Math.round(v * 100) === 100) {
+      void store.update((m) => {
+        const next = { ...m };
+        delete next[key];
+        return next;
+      });
+      return;
+    }
     const now = Date.now();
-    void pageVolumesStore.update((m) => {
-      const existing = m[path];
+    void store.update((m) => {
+      const existing = m[key];
       return {
         ...m,
-        [path]: {
+        [key]: {
           multiplier: v,
           created: existing?.created ?? now,
           lastUsed: now,
@@ -125,20 +140,14 @@
     });
   }
 
+  function setPageVol(v: number): void {
+    pageVol = v;
+    writeVolume(pageVolumesStore, path, v);
+  }
+
   function setSiteVol(v: number): void {
     siteVol = v;
-    const now = Date.now();
-    void siteVolumesStore.update((m) => {
-      const existing = m[hostname];
-      return {
-        ...m,
-        [hostname]: {
-          multiplier: v,
-          created: existing?.created ?? now,
-          lastUsed: now,
-        },
-      };
-    });
+    writeVolume(siteVolumesStore, hostname, v);
   }
 
   function flushSliders(): void {
