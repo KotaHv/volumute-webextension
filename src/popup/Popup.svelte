@@ -30,6 +30,21 @@
   const activeSource: ActiveSource = $derived(
     muted ? 'mute' : hasPageVol ? 'page' : hasSiteVol ? 'site' : 'default',
   );
+  type IconState = 'mute' | 'low' | 'normal' | 'boost';
+  const activeVol = $derived(
+    activeSource === 'page' ? pageVol : activeSource === 'site' ? siteVol : 1,
+  );
+  const iconState: IconState = $derived(
+    activeSource === 'mute'
+      ? 'mute'
+      : activeSource === 'default'
+        ? 'normal'
+        : activeVol < 1
+          ? 'low'
+          : activeVol > 1
+            ? 'boost'
+            : 'normal',
+  );
 
   onMount(async () => {
     settings = await getSettings();
@@ -168,17 +183,36 @@
 
 <main>
   <header class="titlebar">
-    <div class="brand">
-      <span class="brand-mark"></span>
-      <span class="brand-name">VOLUMUTE</span>
-    </div>
-    <span
-      class="power"
+    <span class="brand-name">VOLUMUTE</span>
+    <svg
+      class="brand-mark"
       class:on={hostname && activeSource === 'page'}
       class:on-site={hostname && activeSource === 'site'}
       class:alert={hostname && activeSource === 'mute'}
+      viewBox="0 1.8 29 20.5"
+      width="18.4"
+      height="13"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+      stroke-linecap="round"
+      stroke-linejoin="round"
       title={hostname ? (muted ? 'MUTE' : hasPageVol || hasSiteVol ? 'LIVE' : 'IDLE') : ''}
-    ></span>
+    >
+      <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" fill="currentColor" stroke="none" />
+      {#if iconState === 'mute'}
+        <line x1="14.5" y1="8" x2="22.5" y2="16" />
+        <line x1="22.5" y1="8" x2="14.5" y2="16" />
+      {:else}
+        <path d="M14.83 9.17a4 4 0 0 1 0 5.66" />
+        {#if iconState === 'normal' || iconState === 'boost'}
+          <path d="M18.01 5.99a8.5 8.5 0 0 1 0 12.02" />
+        {/if}
+        {#if iconState === 'boost'}
+          <path d="M21.19 2.81a13 13 0 0 1 0 18.38" />
+        {/if}
+      {/if}
+    </svg>
   </header>
 
   {#if hostname}
@@ -187,24 +221,23 @@
       <span class="site-host">{hostname}</span>
     </div>
 
-    <section class="strip" class:strip-on={muted}>
-      <div class="ch-head">
+    <section class="strip mute-card" class:muted>
+      <div class="row">
         <span class="indicator" class:red={muted}></span>
         <span class="ch-label">{tr('autoMute')}</span>
-        <span class="ch-state" class:on={muted}>{muted ? tr('enabled') : tr('disabled')}</span>
+        <label class="switch">
+          <input
+            type="checkbox"
+            checked={muted}
+            onchange={(e) => toggleMute((e.target as HTMLInputElement).checked)}
+          />
+          <span class="switch-track"><span class="switch-thumb"></span></span>
+        </label>
       </div>
-      <label class="switch">
-        <input
-          type="checkbox"
-          checked={muted}
-          onchange={(e) => toggleMute((e.target as HTMLInputElement).checked)}
-        />
-        <span class="switch-track"><span class="switch-thumb"></span></span>
-      </label>
     </section>
 
     <section class="strip" class:strip-off={muted}>
-      <div class="ch-head">
+      <div class="row">
         <span class="indicator" class:page={!muted && activeSource === 'page'}></span>
         <span class="ch-label">{tr('pageVolume')}</span>
         <button
@@ -245,10 +278,7 @@
           onchange={flushSliders}
         />
       </div>
-    </section>
-
-    <section class="strip" class:strip-off={muted}>
-      <div class="ch-head">
+      <div class="row divider">
         <span class="indicator" class:on-site={!muted && activeSource === 'site'}></span>
         <span class="ch-label">{tr('siteVolume')}</span>
         <button
@@ -314,6 +344,7 @@
     --red: #c84a3c;
     --line: #d4d0c6;
     --glow: none;
+    --mark-glow: none;
   }
   :global(:root[data-theme='dark']) {
     --bg: #14161a;
@@ -328,6 +359,7 @@
     --red: #e5604f;
     --line: #2a2f38;
     --glow: 0 0 5px currentColor;
+    --mark-glow: drop-shadow(0 0 4px currentColor);
   }
   @media (prefers-color-scheme: dark) {
     :global(:root:not([data-theme])) {
@@ -343,6 +375,7 @@
       --red: #e5604f;
       --line: #2a2f38;
       --glow: 0 0 5px currentColor;
+      --mark-glow: drop-shadow(0 0 4px currentColor);
     }
   }
   :global(:root) {
@@ -373,43 +406,27 @@
     padding: 2px 2px 10px;
     border-bottom: 1px solid var(--line);
   }
-  .brand {
-    display: flex;
-    align-items: center;
-    gap: 7px;
-  }
-  .brand-mark {
-    width: 8px;
-    height: 8px;
-    border-radius: 2px;
-    background: var(--amber);
-  }
   .brand-name {
     font-family: var(--mono);
     font-size: 11px;
     letter-spacing: 0.18em;
     color: var(--ink);
   }
-  .power {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: var(--line);
-    box-shadow: var(--glow);
+  .brand-mark {
+    color: var(--ink-dim);
+    flex-shrink: 0;
+    filter: var(--mark-glow);
     transition:
-      background 0.2s,
-      box-shadow 0.2s;
+      color 0.2s,
+      filter 0.2s;
   }
-  .power.on {
-    background: var(--green);
+  .brand-mark.on {
     color: var(--green);
   }
-  .power.on-site {
-    background: var(--amber);
+  .brand-mark.on-site {
     color: var(--amber);
   }
-  .power.alert {
-    background: var(--red);
+  .brand-mark.alert {
     color: var(--red);
   }
 
@@ -443,17 +460,22 @@
     border-radius: 8px;
     padding: 10px 12px;
   }
-  .strip.strip-on {
-    border-color: var(--red);
-  }
   .strip.strip-off {
     opacity: 0.55;
   }
+  .mute-card.muted {
+    border-color: var(--red);
+  }
 
-  .ch-head {
+  .row {
     display: flex;
     align-items: center;
     gap: 8px;
+  }
+  .row.divider {
+    border-top: 1px solid var(--line);
+    margin-top: 10px;
+    padding-top: 10px;
   }
   .ch-label {
     font-family: var(--mono);
@@ -464,16 +486,6 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-  }
-  .ch-state {
-    font-family: var(--mono);
-    font-size: 10px;
-    letter-spacing: 0.1em;
-    color: var(--ink-dim);
-    margin-left: auto;
-  }
-  .ch-state.on {
-    color: var(--red);
   }
 
   .indicator {
@@ -523,18 +535,19 @@
   }
 
   .switch {
-    margin-top: 10px;
     display: flex;
     align-items: center;
     cursor: pointer;
+    margin-left: auto;
+    flex-shrink: 0;
   }
   .switch input {
     display: none;
   }
   .switch-track {
-    width: 44px;
-    height: 24px;
-    border-radius: 12px;
+    width: 36px;
+    height: 20px;
+    border-radius: 10px;
     background: var(--groove);
     position: relative;
     transition: background 0.2s;
@@ -544,8 +557,8 @@
     position: absolute;
     top: 2px;
     left: 2px;
-    width: 20px;
-    height: 20px;
+    width: 16px;
+    height: 16px;
     box-sizing: border-box;
     border-radius: 50%;
     background: var(--surface-2);
@@ -556,11 +569,11 @@
     background: var(--red);
   }
   .switch input:checked + .switch-track .switch-thumb {
-    transform: translateX(20px);
+    transform: translateX(16px);
   }
 
   .fader {
-    margin-top: 10px;
+    margin-top: 6px;
     height: 18px;
     display: flex;
     align-items: center;
@@ -667,7 +680,7 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .power,
+    .brand-mark,
     .indicator,
     .switch-track,
     .switch-thumb {
