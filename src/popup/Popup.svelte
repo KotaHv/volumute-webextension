@@ -272,7 +272,7 @@
           type="range"
           min="0"
           max={MAX_MULTIPLIER}
-          step="any"
+          step="0.01"
           bind:value={pageVol}
           disabled={muted}
           oninput={(e) => setPageVol(Number((e.target as HTMLInputElement).value))}
@@ -313,7 +313,7 @@
           type="range"
           min="0"
           max={MAX_MULTIPLIER}
-          step="any"
+          step="0.01"
           bind:value={siteVol}
           disabled={muted}
           oninput={(e) => setSiteVol(Number((e.target as HTMLInputElement).value))}
