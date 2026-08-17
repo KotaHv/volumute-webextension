@@ -57,6 +57,21 @@ function makeTab(overrides: Partial<browser.Tabs.Tab>): browser.Tabs.Tab {
   };
 }
 
+type MuteQueryHandler = (
+  message: unknown,
+  sender: browser.Runtime.MessageSender,
+) => Promise<{ muted?: boolean } | undefined>;
+
+function getMuteQueryHandler(): MuteQueryHandler {
+  return mocks.browser.runtime.onMessage.addListener.mock.calls[0]?.[0] as MuteQueryHandler;
+}
+
+function makeSender(tabId?: number, url?: string): browser.Runtime.MessageSender {
+  return {
+    tab: tabId === undefined ? undefined : { id: tabId, url },
+  } as browser.Runtime.MessageSender;
+}
+
 describe('applyMuteToTab', () => {
   let applyMuteToTab: typeof import('./background').applyMuteToTab;
 
@@ -247,5 +262,63 @@ describe('applyMuteToTab', () => {
 
     expect(mocks.browser.tabs.update).not.toHaveBeenCalled();
     expect(mocks.browser.tabs.sendMessage).not.toHaveBeenCalled();
+  });
+
+  it('returns no content mute while native mute support is still unknown', async () => {
+    const query = getMuteQueryHandler();
+
+    await expect(
+      query({ type: 'vm:mute-query' }, makeSender(6, 'https://example.com/page')),
+    ).resolves.toEqual({ muted: false });
+  });
+
+  it('returns no content mute when native tab muting is supported', async () => {
+    await establishNativeMuteSupport();
+    mocks.getUserMuteChoice.mockResolvedValue(true);
+    const query = getMuteQueryHandler();
+
+    await expect(
+      query({ type: 'vm:mute-query' }, makeSender(7, 'https://example.com/page')),
+    ).resolves.toEqual({ muted: false });
+  });
+
+  it('returns the effective auto-mute state in fallback mode', async () => {
+    mocks.browser.tabs.update.mockRejectedValue(new Error('unsupported'));
+    await applyMuteToTab(
+      makeTab({
+        id: 8,
+        url: 'https://example.com/page',
+        mutedInfo: { muted: false },
+      }),
+    );
+    const query = getMuteQueryHandler();
+
+    await expect(
+      query({ type: 'vm:mute-query' }, makeSender(8, 'https://example.com/page')),
+    ).resolves.toEqual({ muted: true });
+
+    mocks.getUserMuteChoice.mockResolvedValue(false);
+    await expect(
+      query({ type: 'vm:mute-query' }, makeSender(8, 'https://example.com/page')),
+    ).resolves.toEqual({ muted: false });
+  });
+
+  it('returns no content mute when fallback query has no hostname or tab id', async () => {
+    mocks.browser.tabs.update.mockRejectedValue(new Error('unsupported'));
+    await applyMuteToTab(
+      makeTab({
+        id: 9,
+        url: 'https://example.com/page',
+        mutedInfo: { muted: false },
+      }),
+    );
+    const query = getMuteQueryHandler();
+
+    await expect(query({ type: 'vm:mute-query' }, makeSender())).resolves.toEqual({
+      muted: false,
+    });
+    await expect(query({ type: 'vm:mute-query' }, makeSender(9, 'not a URL'))).resolves.toEqual({
+      muted: false,
+    });
   });
 });

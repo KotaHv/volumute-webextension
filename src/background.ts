@@ -76,10 +76,15 @@ browser.runtime.onMessage.addListener(
   async (msg: unknown, sender: browser.Runtime.MessageSender) => {
     const m = msg as { type?: string } | undefined;
     if (!m || m.type !== 'vm:mute-query') return;
+    if (tabMuteSupported !== false) return { muted: false };
     await ready;
     const hostname = hostnameOf(sender.tab?.url ?? sender.url ?? '');
+    const userChoice =
+      sender.tab?.id !== undefined && hostname !== null
+        ? await getUserMuteChoice(sender.tab.id, hostname)
+        : undefined;
     return {
-      muted: hostname !== null && isAutoMuted(autoMutedStore.snapshot(), hostname),
+      muted: userChoice ?? (hostname !== null && isAutoMuted(autoMutedStore.snapshot(), hostname)),
     };
   },
 );
