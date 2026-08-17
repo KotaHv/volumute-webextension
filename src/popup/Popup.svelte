@@ -34,14 +34,15 @@
   const activeVol = $derived(
     activeSource === 'page' ? pageVol : activeSource === 'site' ? siteVol : 1,
   );
+  const activePct = $derived(Math.round(activeVol * 100));
   const iconState: IconState = $derived(
     activeSource === 'mute'
       ? 'mute'
       : activeSource === 'default'
         ? 'normal'
-        : activeVol < 1
+        : activePct < 100
           ? 'low'
-          : activeVol > 1
+          : activePct > 100
             ? 'boost'
             : 'normal',
   );
