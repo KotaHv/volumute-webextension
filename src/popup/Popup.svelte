@@ -344,7 +344,6 @@
     --red: #c84a3c;
     --line: #d4d0c6;
     --glow: none;
-    --mark-glow: none;
   }
   :global(:root[data-theme='dark']) {
     --bg: #14161a;
@@ -359,7 +358,6 @@
     --red: #e5604f;
     --line: #2a2f38;
     --glow: 0 0 5px currentColor;
-    --mark-glow: drop-shadow(0 0 4px currentColor);
   }
   @media (prefers-color-scheme: dark) {
     :global(:root:not([data-theme])) {
@@ -375,7 +373,6 @@
       --red: #e5604f;
       --line: #2a2f38;
       --glow: 0 0 5px currentColor;
-      --mark-glow: drop-shadow(0 0 4px currentColor);
     }
   }
   :global(:root) {
@@ -415,7 +412,6 @@
   .brand-mark {
     color: var(--ink-dim);
     flex-shrink: 0;
-    filter: var(--mark-glow);
     transition:
       color 0.2s,
       filter 0.2s;
