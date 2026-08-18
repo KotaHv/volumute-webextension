@@ -299,7 +299,7 @@
 <main>
   <header class="titlebar">
     <div class="brand">
-      <span class="brand-mark"></span>
+      <img class="brand-mark" src="/icons/icon-32.png" alt="" />
       <span class="brand-name">VOLUMUTE</span>
       <span class="ver">{versionLabel}</span>
     </div>
@@ -633,10 +633,9 @@
     gap: 8px;
   }
   .brand-mark {
-    width: 10px;
-    height: 10px;
-    border-radius: 2px;
-    background: var(--amber);
+    width: 18px;
+    height: 18px;
+    object-fit: contain;
   }
   .brand-name {
     font-family: var(--mono);
