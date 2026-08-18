@@ -30,6 +30,9 @@ export default {
   themeAuto: 'Follow system',
   themeLight: 'Light',
   themeDark: 'Dark',
+  maxVolume: 'Maximum volume',
+  maxVolumeDesc: 'Set the maximum page and site volume; no upper limit',
+  resetDefault: 'Reset',
   quotaUsage: 'Quota usage',
   quotaBytes: 'bytes',
   quotaItems: 'items',
@@ -44,5 +47,6 @@ export default {
   confirmDeleteSelected: 'Delete selected entries?',
   openOptions: 'Open settings',
   priority: 'Priority',
-  helpPriority: 'Priority: auto mute > page volume > site volume; page volume falls back to site volume',
+  helpPriority:
+    'Priority: auto mute > page volume > site volume; page volume falls back to site volume',
 } as const;

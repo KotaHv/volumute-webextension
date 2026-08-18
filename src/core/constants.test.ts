@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { displayVersion } from './constants';
+import { displayVersion, normalizeMaxMultiplier } from './constants';
+
+describe('normalizeMaxMultiplier', () => {
+  it('keeps the custom maximum at least at the default volume', () => {
+    expect(normalizeMaxMultiplier(0.5)).toBe(1);
+    expect(normalizeMaxMultiplier(3)).toBe(3);
+    expect(normalizeMaxMultiplier(800)).toBe(800);
+  });
+});
 
 describe('displayVersion', () => {
   it('keeps normal release versions unchanged', () => {

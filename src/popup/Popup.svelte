@@ -6,15 +6,18 @@
   import { t } from '../i18n';
   import { applyTheme } from '../theme';
   import { hostnameOf, pathKeyOf } from '../core/url';
-  import { displayVersion } from '../core/constants';
-  import { MAX_MULTIPLIER } from '../core/types';
+  import { DEFAULT_MAX_MULTIPLIER, displayVersion } from '../core/constants';
   import type { MessageKey } from '../i18n';
   import type { Settings } from '../core/types';
 
   let hostname = $state('');
   let path = $state('');
   let tabTitle = $state('');
-  let settings = $state<Settings>({ lang: 'auto', theme: 'auto' });
+  let settings = $state<Settings>({
+    lang: 'auto',
+    theme: 'auto',
+    maxMultiplier: DEFAULT_MAX_MULTIPLIER,
+  });
   let muted = $state(false);
   let pageVol = $state(1);
   let siteVol = $state(1);
@@ -32,7 +35,11 @@
   );
   type IconState = 'mute' | 'low' | 'normal' | 'boost';
   const activeVol = $derived(
-    activeSource === 'page' ? pageVol : activeSource === 'site' ? siteVol : 1,
+    activeSource === 'page'
+      ? Math.min(pageVol, settings.maxMultiplier)
+      : activeSource === 'site'
+        ? Math.min(siteVol, settings.maxMultiplier)
+        : 1,
   );
   const activePct = $derived(Math.round(activeVol * 100));
   const iconState: IconState = $derived(
@@ -113,11 +120,7 @@
   // would keep a unity gain applied. At 100% the setting is cancelled instead —
   // the entry is dropped from the store (page or site) so the effective volume
   // falls back to the default.
-  function writeVolume(
-    store: typeof pageVolumesStore,
-    key: string,
-    v: number,
-  ): void {
+  function writeVolume(store: typeof pageVolumesStore, key: string, v: number): void {
     if (Math.round(v * 100) === 100) {
       void store.update((m) => {
         const next = { ...m };
@@ -272,16 +275,20 @@
           </svg>
         </button>
         <span class="led" class:led-dim={muted}
-          >{Math.round(pageVol * 100)}<span class="pct">%</span></span
+          >{Math.round(Math.min(pageVol, settings.maxMultiplier) * 100)}<span class="pct">%</span
+          ></span
         >
       </div>
-      <div class="fader" style={`--val: ${(pageVol / MAX_MULTIPLIER) * 100}%`}>
+      <div
+        class="fader"
+        style={`--val: ${(Math.min(pageVol, settings.maxMultiplier) / settings.maxMultiplier) * 100}%`}
+      >
         <input
           type="range"
           min="0"
-          max={MAX_MULTIPLIER}
+          max={settings.maxMultiplier}
           step="0.01"
-          bind:value={pageVol}
+          value={Math.min(pageVol, settings.maxMultiplier)}
           oninput={(e) => setPageVol(Number((e.target as HTMLInputElement).value))}
           onchange={flushSliders}
         />
@@ -311,16 +318,20 @@
           </svg>
         </button>
         <span class="led" class:led-dim={muted}
-          >{Math.round(siteVol * 100)}<span class="pct">%</span></span
+          >{Math.round(Math.min(siteVol, settings.maxMultiplier) * 100)}<span class="pct">%</span
+          ></span
         >
       </div>
-      <div class="fader" style={`--val: ${(siteVol / MAX_MULTIPLIER) * 100}%`}>
+      <div
+        class="fader"
+        style={`--val: ${(Math.min(siteVol, settings.maxMultiplier) / settings.maxMultiplier) * 100}%`}
+      >
         <input
           type="range"
           min="0"
-          max={MAX_MULTIPLIER}
+          max={settings.maxMultiplier}
           step="0.01"
-          bind:value={siteVol}
+          value={Math.min(siteVol, settings.maxMultiplier)}
           oninput={(e) => setSiteVol(Number((e.target as HTMLInputElement).value))}
           onchange={flushSliders}
         />

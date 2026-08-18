@@ -9,12 +9,16 @@ describe('computeMultiplier', () => {
   it('prefers page volume over site volume', () => {
     const pageVolumes = { 'https://example.com/p': { multiplier: 2, created: 1, lastUsed: 1 } };
     const siteVolumes = { 'example.com': { multiplier: 0.5, created: 1, lastUsed: 1 } };
-    expect(computeMultiplier(pageVolumes, siteVolumes, 'https://example.com/p', 'example.com')).toBe(2);
+    expect(
+      computeMultiplier(pageVolumes, siteVolumes, 'https://example.com/p', 'example.com'),
+    ).toBe(2);
   });
 
   it('falls back to site volume when no page volume matches', () => {
     const siteVolumes = { 'example.com': { multiplier: 0.25, created: 1, lastUsed: 1 } };
-    expect(computeMultiplier({}, siteVolumes, 'https://example.com/other', 'example.com')).toBe(0.25);
+    expect(computeMultiplier({}, siteVolumes, 'https://example.com/other', 'example.com')).toBe(
+      0.25,
+    );
   });
 
   it('page volume does not leak to other pages of the same site', () => {
@@ -23,19 +27,55 @@ describe('computeMultiplier', () => {
   });
 
   it('clamps out-of-range values', () => {
-    expect(computeMultiplier({ 'https://x/': { multiplier: 99, created: 1, lastUsed: 1 } }, {}, 'https://x/', 'x')).toBe(5);
-    expect(computeMultiplier({ 'https://x/': { multiplier: -3, created: 1, lastUsed: 1 } }, {}, 'https://x/', 'x')).toBe(0);
-    expect(computeMultiplier({ 'https://x/': { multiplier: NaN, created: 1, lastUsed: 1 } }, {}, 'https://x/', 'x')).toBe(1);
+    expect(
+      computeMultiplier(
+        { 'https://x/': { multiplier: 99, created: 1, lastUsed: 1 } },
+        {},
+        'https://x/',
+        'x',
+      ),
+    ).toBe(5);
+    expect(
+      computeMultiplier(
+        { 'https://x/': { multiplier: -3, created: 1, lastUsed: 1 } },
+        {},
+        'https://x/',
+        'x',
+      ),
+    ).toBe(0);
+    expect(
+      computeMultiplier(
+        { 'https://x/': { multiplier: NaN, created: 1, lastUsed: 1 } },
+        {},
+        'https://x/',
+        'x',
+      ),
+    ).toBe(1);
+  });
+
+  it('respects a custom maximum multiplier', () => {
+    const pageVolumes = { 'https://x/': { multiplier: 5, created: 1, lastUsed: 1 } };
+    expect(computeMultiplier(pageVolumes, {}, 'https://x/', 'x', 2)).toBe(2);
   });
 });
 
 describe('isAutoMuted', () => {
   it('true when the host is muted', () => {
-    expect(isAutoMuted({ 'example.com': { enabled: true, created: 1, lastUsed: 1, deviceId: 'a' } }, 'example.com')).toBe(true);
+    expect(
+      isAutoMuted(
+        { 'example.com': { enabled: true, created: 1, lastUsed: 1, deviceId: 'a' } },
+        'example.com',
+      ),
+    ).toBe(true);
   });
 
   it('false when the entry exists but is disabled', () => {
-    expect(isAutoMuted({ 'example.com': { enabled: false, created: 1, lastUsed: 1, deviceId: 'a' } }, 'example.com')).toBe(false);
+    expect(
+      isAutoMuted(
+        { 'example.com': { enabled: false, created: 1, lastUsed: 1, deviceId: 'a' } },
+        'example.com',
+      ),
+    ).toBe(false);
   });
 
   it('false when the host is not configured', () => {

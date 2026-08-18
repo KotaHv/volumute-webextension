@@ -6,7 +6,13 @@
   import { getSettings, subscribeSettings, updateSettings } from '../storage/settings';
   import { currentLang, setCurrentLang, tr } from '../i18n/svelte';
   import { applyTheme } from '../theme';
-  import { DATA_VERSION, MIN_SUPPORTED_VERSION, displayVersion } from '../core/constants';
+  import {
+    DATA_VERSION,
+    DEFAULT_MAX_MULTIPLIER,
+    MIN_MULTIPLIER,
+    MIN_SUPPORTED_VERSION,
+    displayVersion,
+  } from '../core/constants';
   import { MUTE_MIGRATIONS, VOLUME_MIGRATIONS, migrateMap } from '../core/migrate';
   import type {
     MuteMap,
@@ -19,7 +25,11 @@
 
   type Tab = 'sites' | 'data' | 'settings' | 'help';
   let tab = $state<Tab>('sites');
-  let settings = $state<Settings>({ lang: 'auto', theme: 'auto' });
+  let settings = $state<Settings>({
+    lang: 'auto',
+    theme: 'auto',
+    maxMultiplier: DEFAULT_MAX_MULTIPLIER,
+  });
 
   const version = displayVersion(browser.runtime.getManifest().version);
   const versionLabel = __BUILD_STAMP__ ? `v${version} · ${__BUILD_STAMP__}` : `v${version}`;
@@ -268,6 +278,22 @@
   async function setTheme(theme: ThemeMode): Promise<void> {
     await updateSettings({ theme });
   }
+
+  async function setMaxMultiplier(value: number): Promise<void> {
+    if (!Number.isFinite(value)) return;
+    const next = Math.max(MIN_MULTIPLIER, value);
+    settings = { ...settings, maxMultiplier: next };
+    await updateSettings({ maxMultiplier: next });
+  }
+
+  function setMaxVolumePercent(raw: string): void {
+    if (!/^\d+$/.test(raw.trim())) return;
+    void setMaxMultiplier(Number(raw.trim()) / 100);
+  }
+
+  function resetMaxVolume(): void {
+    void setMaxMultiplier(DEFAULT_MAX_MULTIPLIER);
+  }
 </script>
 
 <main>
@@ -468,6 +494,41 @@
           {tr('themeDark', $currentLang)}</label
         >
       </section>
+      <section>
+        <h3>{tr('maxVolume', $currentLang)}</h3>
+        <div class="max-volume-control">
+          <div class="max-volume-value">
+            <input
+              type="text"
+              inputmode="decimal"
+              value={Math.round(settings.maxMultiplier * 100)}
+              onchange={(e) => setMaxVolumePercent((e.target as HTMLInputElement).value)}
+            />
+            <span class="max-volume-unit">%</span>
+          </div>
+          <button
+            class="reset-setting"
+            type="button"
+            onclick={resetMaxVolume}
+            title={tr('resetDefault', $currentLang)}
+            aria-label={tr('resetDefault', $currentLang)}
+          >
+            <svg
+              viewBox="0 0 24 24"
+              width="13"
+              height="13"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2.2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <polyline points="1 4 1 10 7 10" />
+              <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
+            </svg>
+          </button>
+        </div>
+      </section>
     </div>
   {:else}
     <div class="help">
@@ -486,6 +547,10 @@
       <section>
         <h3>{tr('priority', $currentLang)}</h3>
         <p>{tr('helpPriority', $currentLang)}</p>
+      </section>
+      <section>
+        <h3>{tr('maxVolume', $currentLang)}</h3>
+        <p>{tr('maxVolumeDesc', $currentLang)}</p>
       </section>
     </div>
   {/if}
@@ -752,7 +817,59 @@
   .settings input[type='radio'] {
     accent-color: var(--amber);
   }
-
+  .max-volume-control {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .max-volume-value {
+    display: flex;
+    align-items: stretch;
+  }
+  .max-volume-value input[type='text'] {
+    width: 4em;
+    box-sizing: border-box;
+    font-family: var(--mono);
+    font-size: 14px;
+    font-weight: 600;
+    text-align: center;
+    color: var(--ink);
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 5px 0 0 5px;
+    padding: 5px 4px;
+  }
+  .max-volume-value input[type='text']:focus {
+    border-color: var(--amber);
+    outline: 2px solid color-mix(in srgb, var(--amber) 30%, transparent);
+  }
+  .max-volume-unit {
+    display: inline-flex;
+    align-items: center;
+    padding: 0 7px 0 5px;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--amber);
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    border-left: 0;
+    border-radius: 0 5px 5px 0;
+  }
+  .reset-setting {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--ink-dim);
+    border-radius: 4px;
+    padding: 5px;
+    cursor: pointer;
+  }
+  .reset-setting:hover {
+    border-color: var(--amber);
+    color: var(--amber);
+  }
   .help {
     display: flex;
     flex-direction: column;
