@@ -1,6 +1,6 @@
 # VoluMute
 
-A browser extension (Chrome & Firefox) for managing volume: **auto-mute sites across devices** and **per-page / per-site volume control** (smooth 0–5x).
+A browser extension (Chrome & Firefox) for managing volume: **auto-mute sites across devices** and **per-page / per-site volume control** with a customizable maximum.
 
 ## Features
 
@@ -8,7 +8,7 @@ A browser extension (Chrome & Firefox) for managing volume: **auto-mute sites ac
 - **Volume control** — Two independent levels:
   - *Page volume*: applies to a specific page URL (query/hash ignored)
   - *Site volume*: applies to the whole site
-  - Multiplicative: effective volume = page volume × multiplier, adjustable 0–500% without steps
+  - Multiplicative: effective volume = page volume × multiplier, adjustable from 0%; the maximum defaults to 500% and can be customized without an upper limit
 - **Priority**: auto mute > page volume > site volume (volume settings are ignored while muted)
 - English & 中文, light & dark theme (follows system)
 - Manage all settings in one place: site list, batch delete, export/import (merge or overwrite)
@@ -32,7 +32,7 @@ pnpm build   # outputs dist/chrome and dist/firefox
 ## Usage
 
 - **Popup** (click the toolbar icon): toggle auto mute for the current site, adjust page / site volume faders with live LED readout; open settings from the footer.
-- **Options** (right-click the icon → Options): site list, data management (delete / export / import), language and theme.
+- **Options** (right-click the icon → Options): site list, data management (delete / export / import), language, theme, and maximum volume (500% by default).
 
 ## Notes
 

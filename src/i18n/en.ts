@@ -31,7 +31,7 @@ export default {
   themeLight: 'Light',
   themeDark: 'Dark',
   maxVolume: 'Maximum volume',
-  maxVolumeDesc: 'Set the maximum page and site volume; no upper limit',
+  maxVolumeDesc: 'Defaults to 500%; customize the maximum page and site volume with no upper limit',
   resetDefault: 'Reset',
   quotaUsage: 'Quota usage',
   quotaBytes: 'bytes',

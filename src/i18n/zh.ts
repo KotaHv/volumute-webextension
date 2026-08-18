@@ -31,7 +31,7 @@ export default {
   themeLight: '浅色',
   themeDark: '深色',
   maxVolume: '最大音量',
-  maxVolumeDesc: '设置网页和网站音量上限, 不限制最大值',
+  maxVolumeDesc: '默认最大音量为 500%, 可自定义且不限制最大值',
   resetDefault: '恢复默认',
   quotaUsage: '配额用量',
   quotaBytes: '字节',

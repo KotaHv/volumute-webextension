@@ -3,6 +3,6 @@
     "message": "VoluMute"
   },
   "extensionDescription": {
-    "message": "Auto-mute sites across devices; per-page and per-site volume control up to 5x."
+    "message": "Auto-mute sites across devices; volume defaults to 500% and can be customized without an upper limit."
   }
 }
