@@ -246,7 +246,7 @@
       </div>
     </section>
 
-    <section class="strip" class:strip-off={muted}>
+    <section class="strip">
       <div class="row">
         <span class="indicator" class:page={!muted && activeSource === 'page'}></span>
         <span class="ch-label">{tr('pageVolume')}</span>
@@ -254,7 +254,6 @@
           class="clear"
           class:resetting={pageResetting}
           onclick={clearPageVol}
-          disabled={muted}
           title={tr('resetVolume')}
           style:visibility={hasPageVol || pageResetting ? 'visible' : 'hidden'}
         >
@@ -283,7 +282,6 @@
           max={MAX_MULTIPLIER}
           step="0.01"
           bind:value={pageVol}
-          disabled={muted}
           oninput={(e) => setPageVol(Number((e.target as HTMLInputElement).value))}
           onchange={flushSliders}
         />
@@ -295,7 +293,6 @@
           class="clear"
           class:resetting={siteResetting}
           onclick={clearSiteVol}
-          disabled={muted}
           title={tr('resetVolume')}
           style:visibility={hasSiteVol || siteResetting ? 'visible' : 'hidden'}
         >
@@ -324,7 +321,6 @@
           max={MAX_MULTIPLIER}
           step="0.01"
           bind:value={siteVol}
-          disabled={muted}
           oninput={(e) => setSiteVol(Number((e.target as HTMLInputElement).value))}
           onchange={flushSliders}
         />
@@ -466,9 +462,6 @@
     border-radius: 8px;
     padding: 10px 12px;
   }
-  .strip.strip-off {
-    opacity: 0.55;
-  }
   .mute-card.muted {
     border-color: var(--red);
   }
@@ -595,9 +588,6 @@
     cursor: pointer;
     outline-offset: 3px;
   }
-  .fader input[type='range']:disabled {
-    cursor: not-allowed;
-  }
   .fader input[type='range']::-webkit-slider-thumb {
     -webkit-appearance: none;
     appearance: none;
@@ -628,10 +618,6 @@
   .clear:hover {
     color: var(--ink);
     border-color: var(--line);
-  }
-  .clear:disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
   }
   .clear.resetting {
     pointer-events: none;
