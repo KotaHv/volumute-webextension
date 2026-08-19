@@ -23,7 +23,7 @@
     Lang,
   } from '../core/types';
 
-  type Tab = 'sites' | 'data' | 'settings' | 'help';
+  type Tab = 'sites' | 'settings' | 'help';
   let tab = $state<Tab>('sites');
   let settings = $state<Settings>({
     lang: 'auto',
@@ -67,6 +67,13 @@
     return `${Math.round(v * 100)}%`;
   }
 
+  function fmtBytes(n: number): string {
+    if (n >= 1024 * 1024 * 1024) return `${(n / (1024 * 1024 * 1024)).toFixed(1)} GB`;
+    if (n >= 1024 * 1024) return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+    if (n >= 1024) return `${(n / 1024).toFixed(1)} KB`;
+    return `${n} B`;
+  }
+
   const muteRows = $derived(
     Object.entries(muteMap).map(([host, e]) => ({
       key: host,
@@ -95,6 +102,8 @@
   const localBytes = $derived(
     new TextEncoder().encode(JSON.stringify({ siteMap, pageMap })).length,
   );
+  const muteCount = $derived(Object.keys(muteMap).length);
+  const localCount = $derived(Object.keys(siteMap).length + Object.keys(pageMap).length);
 
   onMount(async () => {
     settings = await getSettings();
@@ -136,7 +145,6 @@
         pageVolumesStore.reload(),
         minDelay,
       ]);
-      showStatus(tr('refreshDone', $currentLang), true);
     } finally {
       refreshing = false;
     }
@@ -303,305 +311,266 @@
       <span class="brand-name">VOLUMUTE</span>
       <span class="ver">{versionLabel}</span>
     </div>
-    <nav>
-      <button class:active={tab === 'sites'} onclick={() => (tab = 'sites')}
-        >{tr('tabSiteList', $currentLang)}</button
+    <nav class="tab-switch" aria-label={tr('tabSettings', $currentLang)}>
+      <button
+        class:active={tab === 'sites'}
+        aria-pressed={tab === 'sites'}
+        onclick={() => (tab = 'sites')}>{tr('tabSiteList', $currentLang)}</button
       >
-      <button class:active={tab === 'data'} onclick={() => (tab = 'data')}
-        >{tr('tabData', $currentLang)}</button
+      <button
+        class:active={tab === 'settings'}
+        aria-pressed={tab === 'settings'}
+        onclick={() => (tab = 'settings')}>{tr('tabSettings', $currentLang)}</button
       >
-      <button class:active={tab === 'settings'} onclick={() => (tab = 'settings')}
-        >{tr('tabSettings', $currentLang)}</button
-      >
-      <button class:active={tab === 'help'} onclick={() => (tab = 'help')}
-        >{tr('tabHelp', $currentLang)}</button
+      <button
+        class:active={tab === 'help'}
+        aria-pressed={tab === 'help'}
+        onclick={() => (tab = 'help')}>{tr('tabHelp', $currentLang)}</button
       >
     </nav>
   </header>
 
-  {#if tab === 'sites'}
-    <div class="grid">
-      <DataSection
-        title={tr('tabSiteList', $currentLang) + ': ' + tr('autoMute', $currentLang)}
-        rows={muteRows}
-        emptyText={tr('noEntries', $currentLang)}
-        selected={muteSelected}
-        onDelete={deleteMutes}
-      />
-      <DataSection
-        title={tr('siteVolume', $currentLang)}
-        rows={siteRows}
-        emptyText={tr('noEntries', $currentLang)}
-        selected={siteSelected}
-        onDelete={deleteSites}
-      />
-      <DataSection
-        title={tr('pageVolume', $currentLang)}
-        rows={pageRows}
-        emptyText={tr('noEntries', $currentLang)}
-        selected={pageSelected}
-        onDelete={deletePages}
-      />
-    </div>
-  {:else if tab === 'data'}
-    <div class="quota">
-      <span class="quota-head">{tr('quotaUsage', $currentLang)}</span>
-      <span class="quota-item"
-        >{tr('autoMute', $currentLang)} (sync): <b>{syncBytes}</b>
-        {tr('quotaBytes', $currentLang)} · <b>{Object.keys(muteMap).length}</b>
-        {tr('quotaItems', $currentLang)}</span
-      >
-      <span class="quota-item"
-        >{tr('siteVolume', $currentLang)}/{tr('pageVolume', $currentLang)} (local):
-        <b>{localBytes}</b>
-        {tr('quotaBytes', $currentLang)} ·
-        <b>{Object.keys(siteMap).length + Object.keys(pageMap).length}</b>
-        {tr('quotaItems', $currentLang)}</span
-      >
-    </div>
-    <div class="io">
-      <button
-        class="icon-btn"
-        class:refreshing
-        aria-busy={refreshing}
-        onclick={refresh}
-        title={tr('refresh', $currentLang)}
-      >
-        <svg
-          class:spinning={refreshing}
-          class="icon"
-          viewBox="0 0 24 24"
-          width="12"
-          height="12"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2.6"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        >
-          <path d="M21 12a9 9 0 1 1-2.64-6.36" />
-          <path d="M21 3v6h-6" />
-        </svg>
-      </button>
-      <button onclick={exportData}>{tr('exportData', $currentLang)}</button>
-      <span class="io-sep"></span>
-      <label>
-        <input type="radio" name="mode" value="merge" bind:group={importMode} />
-        {tr('importMerge', $currentLang)}
-      </label>
-      <label>
-        <input type="radio" name="mode" value="overwrite" bind:group={importMode} />
-        {tr('importOverwrite', $currentLang)}
-      </label>
-      <button onclick={() => fileInput?.click()}>{tr('importData', $currentLang)}</button>
-      <input
-        type="file"
-        accept="application/json"
-        bind:this={fileInput}
-        hidden
-        onchange={importData}
-      />
-      {#if statusMsg}
-        <span class="status" class:ok={statusOk}>{statusMsg}</span>
+  {#key tab}
+    <div class="tab-panel">
+      {#if tab === 'sites'}
+        <div class="data-summary">
+          <div class="data-summary-head">
+            <h3>{tr('quotaUsage', $currentLang)}</h3>
+            <button
+              class="icon-btn"
+              class:refreshing
+              aria-busy={refreshing}
+              onclick={refresh}
+              title={tr('refresh', $currentLang)}
+            >
+              <svg
+                class:spinning={refreshing}
+                class="icon"
+                viewBox="0 0 24 24"
+                width="14"
+                height="14"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.6"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M21 12a9 9 0 1 1-2.64-6.36" />
+                <path d="M21 3v6h-6" />
+              </svg>
+            </button>
+          </div>
+          <div class="quota-stats">
+            <div class="quota-stat">
+              <div class="quota-stat-head">
+                <span class="quota-stat-name plate"
+                  >{tr('autoMute', $currentLang)} <small>SYNC</small></span
+                >
+                <strong class="quota-stat-bytes">{muteCount}</strong>
+              </div>
+              <div class="quota-stat-foot"
+                >{tr('quotaStorageUsed', $currentLang)} {fmtBytes(syncBytes)}</div
+              >
+            </div>
+            <div class="quota-stat">
+              <div class="quota-stat-head">
+                <span class="quota-stat-name plate"
+                  >{tr('siteVolume', $currentLang)} / {tr('pageVolume', $currentLang)}
+                  <small>LOCAL</small></span
+                >
+                <strong class="quota-stat-bytes">{localCount}</strong>
+              </div>
+              <div class="quota-stat-foot"
+                >{tr('quotaStorageUsed', $currentLang)} {fmtBytes(localBytes)}</div
+              >
+            </div>
+          </div>
+        </div>
+        <section class="data-management">
+          <h3>{tr('tabData', $currentLang)}</h3>
+          <div class="management-actions">
+            <button class="hw-btn" onclick={exportData}>{tr('exportData', $currentLang)}</button>
+
+            <span class="management-divider" aria-hidden="true"></span>
+
+            <button class="hw-btn" onclick={() => fileInput?.click()}
+              >{tr('importData', $currentLang)}</button
+            >
+            <div class="import-mode" role="radiogroup" aria-label={tr('restoreData', $currentLang)}>
+              <button
+                type="button"
+                class:active={importMode === 'merge'}
+                role="radio"
+                aria-checked={importMode === 'merge'}
+                onclick={() => (importMode = 'merge')}>{tr('importMerge', $currentLang)}</button
+              >
+              <button
+                type="button"
+                class:active={importMode === 'overwrite'}
+                role="radio"
+                aria-checked={importMode === 'overwrite'}
+                onclick={() => (importMode = 'overwrite')}
+                >{tr('importOverwrite', $currentLang)}</button
+              >
+            </div>
+          </div>
+          <input
+            type="file"
+            accept="application/json"
+            bind:this={fileInput}
+            hidden
+            onchange={importData}
+          />
+          {#if statusMsg}
+            <div class="data-status" class:ok={statusOk}>{statusMsg}</div>
+          {/if}
+        </section>
+        <div class="grid">
+          <DataSection
+            title={tr('tabSiteList', $currentLang) + ': ' + tr('autoMute', $currentLang)}
+            rows={muteRows}
+            emptyText={tr('noEntries', $currentLang)}
+            selected={muteSelected}
+            onDelete={deleteMutes}
+          />
+          <DataSection
+            title={tr('siteVolume', $currentLang)}
+            rows={siteRows}
+            emptyText={tr('noEntries', $currentLang)}
+            selected={siteSelected}
+            onDelete={deleteSites}
+          />
+          <DataSection
+            title={tr('pageVolume', $currentLang)}
+            rows={pageRows}
+            emptyText={tr('noEntries', $currentLang)}
+            selected={pageSelected}
+            onDelete={deletePages}
+          />
+        </div>
+      {:else if tab === 'settings'}
+        <div class="settings">
+          <section class="settings-panel">
+            <div class="setting-row">
+              <h3>{tr('language', $currentLang)}</h3>
+              <div class="segmented" role="radiogroup" aria-label={tr('language', $currentLang)}>
+                <button
+                  type="button"
+                  class:selected={settings.lang === 'auto'}
+                  role="radio"
+                  aria-checked={settings.lang === 'auto'}
+                  onclick={() => setLang('auto')}>{tr('langAuto', $currentLang)}</button
+                >
+                <button
+                  type="button"
+                  class:selected={settings.lang === 'zh'}
+                  role="radio"
+                  aria-checked={settings.lang === 'zh'}
+                  onclick={() => setLang('zh')}>中文</button
+                >
+                <button
+                  type="button"
+                  class:selected={settings.lang === 'en'}
+                  role="radio"
+                  aria-checked={settings.lang === 'en'}
+                  onclick={() => setLang('en')}>English</button
+                >
+              </div>
+            </div>
+            <div class="setting-row">
+              <h3>{tr('theme', $currentLang)}</h3>
+              <div class="segmented" role="radiogroup" aria-label={tr('theme', $currentLang)}>
+                <button
+                  type="button"
+                  class:selected={settings.theme === 'auto'}
+                  role="radio"
+                  aria-checked={settings.theme === 'auto'}
+                  onclick={() => setTheme('auto')}>{tr('themeAuto', $currentLang)}</button
+                >
+                <button
+                  type="button"
+                  class:selected={settings.theme === 'light'}
+                  role="radio"
+                  aria-checked={settings.theme === 'light'}
+                  onclick={() => setTheme('light')}>{tr('themeLight', $currentLang)}</button
+                >
+                <button
+                  type="button"
+                  class:selected={settings.theme === 'dark'}
+                  role="radio"
+                  aria-checked={settings.theme === 'dark'}
+                  onclick={() => setTheme('dark')}>{tr('themeDark', $currentLang)}</button
+                >
+              </div>
+            </div>
+            <div class="setting-row">
+              <h3>{tr('maxVolume', $currentLang)}</h3>
+              <div class="max-volume-control">
+                <div class="max-volume-value">
+                  <input
+                    type="text"
+                    inputmode="decimal"
+                    value={Math.round(settings.maxMultiplier * 100)}
+                    onchange={(e) => setMaxVolumePercent((e.target as HTMLInputElement).value)}
+                  />
+                  <span class="max-volume-unit">%</span>
+                </div>
+                {#if settings.maxMultiplier !== DEFAULT_MAX_MULTIPLIER}
+                  <button
+                    class="reset-setting"
+                    type="button"
+                    onclick={resetMaxVolume}
+                    title={tr('resetDefault', $currentLang)}
+                    aria-label={tr('resetDefault', $currentLang)}
+                  >
+                    <svg
+                      viewBox="0 0 24 24"
+                      width="13"
+                      height="13"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2.2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <polyline points="1 4 1 10 7 10" />
+                      <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
+                    </svg>
+                  </button>
+                {/if}
+              </div>
+            </div>
+          </section>
+        </div>
+      {:else}
+        <div class="help">
+          <section>
+            <h3>{tr('autoMute', $currentLang)}</h3>
+            <p>{tr('autoMuteDesc', $currentLang)}</p>
+          </section>
+          <section>
+            <h3>{tr('pageVolume', $currentLang)}</h3>
+            <p>{tr('pageVolumeDesc', $currentLang)}</p>
+          </section>
+          <section>
+            <h3>{tr('siteVolume', $currentLang)}</h3>
+            <p>{tr('siteVolumeDesc', $currentLang)}</p>
+          </section>
+          <section>
+            <h3>{tr('priority', $currentLang)}</h3>
+            <p>{tr('helpPriority', $currentLang)}</p>
+          </section>
+          <section>
+            <h3>{tr('maxVolume', $currentLang)}</h3>
+            <p>{tr('maxVolumeDesc', $currentLang)}</p>
+          </section>
+        </div>
       {/if}
     </div>
-    <div class="grid">
-      <DataSection
-        title={tr('autoMute', $currentLang)}
-        rows={muteRows}
-        emptyText={tr('noEntries', $currentLang)}
-        selected={muteSelected}
-        onDelete={deleteMutes}
-      />
-      <DataSection
-        title={tr('siteVolume', $currentLang)}
-        rows={siteRows}
-        emptyText={tr('noEntries', $currentLang)}
-        selected={siteSelected}
-        onDelete={deleteSites}
-      />
-      <DataSection
-        title={tr('pageVolume', $currentLang)}
-        rows={pageRows}
-        emptyText={tr('noEntries', $currentLang)}
-        selected={pageSelected}
-        onDelete={deletePages}
-      />
-    </div>
-  {:else if tab === 'settings'}
-    <div class="settings">
-      <section>
-        <h3>{tr('language', $currentLang)}</h3>
-        <label
-          ><input
-            type="radio"
-            name="lang"
-            value="auto"
-            checked={settings.lang === 'auto'}
-            onchange={() => setLang('auto')}
-          />
-          {tr('langAuto', $currentLang)}</label
-        >
-        <label
-          ><input
-            type="radio"
-            name="lang"
-            value="zh"
-            checked={settings.lang === 'zh'}
-            onchange={() => setLang('zh')}
-          /> 中文</label
-        >
-        <label
-          ><input
-            type="radio"
-            name="lang"
-            value="en"
-            checked={settings.lang === 'en'}
-            onchange={() => setLang('en')}
-          /> English</label
-        >
-      </section>
-      <section>
-        <h3>{tr('theme', $currentLang)}</h3>
-        <label
-          ><input
-            type="radio"
-            name="theme"
-            value="auto"
-            checked={settings.theme === 'auto'}
-            onchange={() => setTheme('auto')}
-          />
-          {tr('themeAuto', $currentLang)}</label
-        >
-        <label
-          ><input
-            type="radio"
-            name="theme"
-            value="light"
-            checked={settings.theme === 'light'}
-            onchange={() => setTheme('light')}
-          />
-          {tr('themeLight', $currentLang)}</label
-        >
-        <label
-          ><input
-            type="radio"
-            name="theme"
-            value="dark"
-            checked={settings.theme === 'dark'}
-            onchange={() => setTheme('dark')}
-          />
-          {tr('themeDark', $currentLang)}</label
-        >
-      </section>
-      <section>
-        <h3>{tr('maxVolume', $currentLang)}</h3>
-        <div class="max-volume-control">
-          <div class="max-volume-value">
-            <input
-              type="text"
-              inputmode="decimal"
-              value={Math.round(settings.maxMultiplier * 100)}
-              onchange={(e) => setMaxVolumePercent((e.target as HTMLInputElement).value)}
-            />
-            <span class="max-volume-unit">%</span>
-          </div>
-          <button
-            class="reset-setting"
-            type="button"
-            onclick={resetMaxVolume}
-            title={tr('resetDefault', $currentLang)}
-            aria-label={tr('resetDefault', $currentLang)}
-          >
-            <svg
-              viewBox="0 0 24 24"
-              width="13"
-              height="13"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2.2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            >
-              <polyline points="1 4 1 10 7 10" />
-              <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
-            </svg>
-          </button>
-        </div>
-      </section>
-    </div>
-  {:else}
-    <div class="help">
-      <section>
-        <h3>{tr('autoMute', $currentLang)}</h3>
-        <p>{tr('autoMuteDesc', $currentLang)}</p>
-      </section>
-      <section>
-        <h3>{tr('pageVolume', $currentLang)}</h3>
-        <p>{tr('pageVolumeDesc', $currentLang)}</p>
-      </section>
-      <section>
-        <h3>{tr('siteVolume', $currentLang)}</h3>
-        <p>{tr('siteVolumeDesc', $currentLang)}</p>
-      </section>
-      <section>
-        <h3>{tr('priority', $currentLang)}</h3>
-        <p>{tr('helpPriority', $currentLang)}</p>
-      </section>
-      <section>
-        <h3>{tr('maxVolume', $currentLang)}</h3>
-        <p>{tr('maxVolumeDesc', $currentLang)}</p>
-      </section>
-    </div>
-  {/if}
+  {/key}
 </main>
 
 <style>
-  :global(:root) {
-    --bg: #e9e7e1;
-    --surface: #f5f3ee;
-    --surface-2: #e7e4dd;
-    --groove: #d6d2c8;
-    --ink: #26292f;
-    --ink-dim: #6f7580;
-    --amber: #b06500;
-    --amber-glow: transparent;
-    --green: #158f63;
-    --red: #c84a3c;
-    --line: #d4d0c6;
-  }
-  :global(:root[data-theme='dark']) {
-    --bg: #14161a;
-    --surface: #1d2026;
-    --surface-2: #262b33;
-    --groove: #0e1013;
-    --ink: #e6e8eb;
-    --ink-dim: #8a909c;
-    --amber: #ffaf4d;
-    --amber-glow: 0 0 10px rgba(255, 175, 77, 0.35);
-    --green: #3ecf8e;
-    --red: #e5604f;
-    --line: #2a2f38;
-  }
-  @media (prefers-color-scheme: dark) {
-    :global(:root:not([data-theme])) {
-      --bg: #14161a;
-      --surface: #1d2026;
-      --surface-2: #262b33;
-      --groove: #0e1013;
-      --ink: #e6e8eb;
-      --ink-dim: #8a909c;
-      --amber: #ffaf4d;
-      --amber-glow: 0 0 10px rgba(255, 175, 77, 0.35);
-      --green: #3ecf8e;
-      --red: #e5604f;
-      --line: #2a2f38;
-    }
-  }
-  :global(:root) {
-    --mono: ui-monospace, 'SF Mono', 'Cascadia Mono', Menlo, Consolas, monospace;
-    --sans: system-ui, -apple-system, 'Segoe UI', sans-serif;
-  }
   :global(html) {
     background: var(--bg);
   }
@@ -609,140 +578,184 @@
     margin: 0;
     padding: 0;
     background: var(--bg);
+    min-width: 280px;
   }
 
   main {
-    max-width: 760px;
+    position: relative;
+    max-width: 1040px;
     margin: 0 auto;
-    padding: 28px 24px 40px;
-    font-family: var(--sans);
+    padding: 42px 34px 64px;
+    font-family: var(--font-sans);
     color: var(--ink);
+  }
+  main::before {
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    content: '';
+    opacity: 0.5;
+    background-image:
+      linear-gradient(rgba(255, 255, 255, 0.022) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.022) 1px, transparent 1px);
+    background-size: 28px 28px;
+    mask-image: linear-gradient(to bottom, black, transparent 78%);
   }
 
   .titlebar {
+    position: relative;
     display: flex;
-    align-items: center;
+    align-items: flex-end;
     justify-content: space-between;
-    padding-bottom: 14px;
+    gap: 24px;
+    padding: 16px 0 22px;
     border-bottom: 1px solid var(--line);
-    margin-bottom: 18px;
+    margin-bottom: 26px;
   }
   .brand {
+    position: relative;
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 12px;
+    min-width: 0;
   }
   .brand-mark {
-    width: 18px;
-    height: 18px;
+    width: 30px;
+    height: 30px;
     object-fit: contain;
+    border-radius: var(--radius);
   }
   .brand-name {
-    font-family: var(--mono);
-    font-size: 13px;
-    letter-spacing: 0.2em;
+    overflow: hidden;
+    color: var(--ink);
+    font-family: var(--font-display);
+    font-size: clamp(20px, 2.6vw, 27px);
+    font-weight: 600;
+    letter-spacing: 0.22em;
+    line-height: 1;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-shadow: var(--engrave-shadow);
   }
   .ver {
-    font-family: var(--mono);
-    font-size: 10px;
+    align-self: flex-end;
+    padding-bottom: 1px;
+    font-family: var(--font-mono);
+    font-size: 9px;
     letter-spacing: 0.08em;
-    color: var(--ink-dim);
+    color: var(--ink-faint);
+    white-space: nowrap;
   }
-  nav {
+
+  .tab-switch {
     display: flex;
+    width: min(26rem, 100%);
     gap: 2px;
+    padding: 3px;
+    background: var(--groove);
+    border: 1px solid var(--groove-border);
+    border-radius: var(--radius);
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.35);
   }
-  nav button {
+  .tab-switch button {
+    flex: 1;
+    position: relative;
     border: none;
-    background: none;
-    padding: 7px 12px;
-    font-family: var(--mono);
-    font-size: 11px;
-    letter-spacing: 0.1em;
+    border-radius: 2px;
+    background: transparent;
+    padding: 9px 12px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.09em;
     text-transform: uppercase;
     color: var(--ink-dim);
     cursor: pointer;
-    border-bottom: 2px solid transparent;
+    white-space: nowrap;
+    transition:
+      color 140ms ease,
+      background 140ms ease;
   }
-  nav button:hover {
+  .tab-switch button:hover {
     color: var(--ink);
+    background: var(--panel);
   }
-  nav button.active {
+  .tab-switch button.active {
     color: var(--amber);
-    border-bottom-color: var(--amber);
+    background: var(--panel-2);
+    box-shadow: var(--panel-etched);
+  }
+  .tab-switch button.active::after {
+    position: absolute;
+    left: 50%;
+    bottom: 2px;
+    transform: translateX(-50%);
+    width: 4px;
+    height: 2px;
+    border-radius: 1px;
+    content: '';
+    background: var(--amber);
+    box-shadow: var(--amber-glow);
   }
 
   .grid {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    align-items: start;
+    gap: 14px;
   }
 
-  .quota {
-    background: var(--surface);
+  .data-summary,
+  .data-management {
+    background: var(--panel);
     border: 1px solid var(--line);
-    border-radius: 8px;
-    padding: 12px 14px;
-    margin-bottom: 12px;
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
-    font-size: 12px;
-    color: var(--ink-dim);
+    border-radius: var(--radius);
+    box-shadow: var(--panel-etched);
   }
-  .quota-head {
-    font-family: var(--mono);
-    font-size: 11px;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    color: var(--ink);
+  .data-summary {
+    margin-bottom: 14px;
+    padding: 16px 18px;
   }
-  .quota-item {
-    font-family: var(--mono);
-    font-size: 11px;
-    font-variant-numeric: tabular-nums;
-  }
-  .quota-item b {
-    color: var(--amber);
-    font-weight: 600;
-  }
-
-  .io {
+  .data-summary-head {
     display: flex;
     align-items: center;
-    gap: 8px;
-    margin-bottom: 14px;
-    font-size: 12px;
-    flex-wrap: wrap;
+    justify-content: space-between;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--line);
   }
-  .io button {
-    border: 1px solid var(--line);
-    background: var(--surface);
+  .data-summary-head h3 {
+    margin: 0;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
     color: var(--ink);
-    padding: 6px 12px;
-    border-radius: 6px;
-    font-size: 12px;
-    cursor: pointer;
+    text-shadow: var(--engrave-shadow);
   }
-  .io button:hover {
-    border-color: var(--amber);
-    color: var(--amber);
-  }
-  .io .icon-btn {
+  .data-summary-head .icon-btn {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    padding: 6px 12px;
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--panel-2);
+    color: var(--ink-dim);
+    cursor: pointer;
   }
-  .io .icon-btn.refreshing {
+  .data-summary-head .icon-btn:hover,
+  .data-summary-head .icon-btn.refreshing {
     border-color: var(--amber);
     color: var(--amber);
-    animation: io-pulse 0.6s ease-in-out infinite;
   }
-  .io .icon {
+  .data-summary-head .icon {
     display: block;
   }
-  .io .icon.spinning {
+  .data-summary-head .icon.spinning {
     animation: io-spin 0.7s linear infinite;
   }
   @keyframes io-spin {
@@ -750,71 +763,230 @@
       transform: rotate(360deg);
     }
   }
-  @keyframes io-pulse {
-    0%,
-    100% {
-      transform: scale(1);
-    }
-    50% {
-      transform: scale(1.12);
-    }
+
+  .quota-stats {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+    padding-top: 14px;
   }
-  .io-sep {
-    width: 1px;
-    height: 16px;
-    background: var(--line);
-    margin: 0 4px;
+  .quota-stat {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 11px 13px;
+    background: var(--groove);
+    border: 1px solid var(--groove-border);
+    border-radius: var(--radius);
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.3);
   }
-  .io label {
+  .quota-stat-head {
     display: flex;
     align-items: center;
-    gap: 5px;
+    justify-content: space-between;
+    gap: 10px;
+  }
+  .quota-stat-name {
+    font-size: 10px;
     color: var(--ink-dim);
-    cursor: pointer;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
-  .io input[type='radio'] {
-    accent-color: var(--amber);
+  .quota-stat-name small {
+    font-size: 8px;
+    letter-spacing: 0.1em;
+    color: var(--ink-dim);
   }
-  .status {
+  .quota-stat-bytes {
+    flex-shrink: 0;
+    font-family: var(--font-mono);
+    font-size: 14px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
     color: var(--amber);
-    font-size: 12px;
+    text-shadow: var(--amber-glow);
+    background: var(--bg);
+    border: 1px solid var(--groove-border);
+    border-radius: 2px;
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.35);
+    padding: 3px 6px;
+    line-height: 1.2;
   }
-  .status.ok {
-    color: var(--green);
+  .quota-stat-foot {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.04em;
+    color: var(--ink-dim);
+    line-height: 1.4;
   }
 
-  .settings {
+  .data-management {
+    position: relative;
     display: flex;
-    flex-direction: column;
-    gap: 12px;
+    align-items: center;
+    gap: 20px;
+    margin-bottom: 18px;
+    padding: 14px 18px;
   }
-  .settings section {
-    background: var(--surface);
-    border: 1px solid var(--line);
-    border-radius: 8px;
-    padding: 14px;
-    display: flex;
-    flex-direction: column;
-    gap: 7px;
-    font-size: 13px;
-  }
-  .settings h3 {
-    margin: 0 0 4px;
-    font-family: var(--mono);
+  .data-management h3 {
+    flex: 0 0 auto;
+    margin: 0;
+    font-family: var(--font-mono);
     font-size: 11px;
+    font-weight: 700;
     letter-spacing: 0.12em;
     text-transform: uppercase;
     color: var(--ink);
+    text-shadow: var(--engrave-shadow);
   }
-  .settings label {
+  .management-actions {
     display: flex;
     align-items: center;
+    justify-content: flex-end;
     gap: 8px;
-    color: var(--ink-dim);
-    cursor: pointer;
+    flex: 1;
+    min-width: 0;
   }
-  .settings input[type='radio'] {
-    accent-color: var(--amber);
+  .management-divider {
+    width: 1px;
+    height: 24px;
+    flex: 0 0 auto;
+    background: var(--line);
+  }
+  .management-actions .import-mode {
+    height: 34px;
+    box-sizing: border-box;
+  }
+  .import-mode {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    padding: 3px;
+    background: var(--groove);
+    border: 1px solid var(--groove-border);
+    border-radius: var(--radius);
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.35);
+    width: min(11rem, 100%);
+  }
+  .import-mode button {
+    flex: 1;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    padding: 0 10px;
+    border: none;
+    border-radius: 2px;
+    background: transparent;
+    color: var(--ink-dim);
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    cursor: pointer;
+    white-space: nowrap;
+    transition:
+      color 140ms ease,
+      background 140ms ease;
+  }
+  .import-mode button:hover {
+    color: var(--ink);
+  }
+  .import-mode button.active {
+    color: var(--amber);
+    background: var(--panel-2);
+    box-shadow: var(--panel-etched);
+  }
+  .data-status {
+    position: absolute;
+    right: 18px;
+    bottom: -17px;
+    color: var(--amber);
+    font-family: var(--font-mono);
+    font-size: 10px;
+  }
+  .data-status.ok {
+    color: var(--green);
+  }
+
+  .settings-panel {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 5px 18px;
+    box-shadow: var(--panel-etched);
+  }
+  .setting-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+    min-height: 62px;
+    border-bottom: 1px solid var(--line);
+  }
+  .setting-row:last-child {
+    border-bottom: 0;
+  }
+  .setting-row h3 {
+    flex: 0 0 120px;
+    margin: 0;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ink);
+    text-shadow: var(--engrave-shadow);
+  }
+  .segmented {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    padding: 3px;
+    background: var(--groove);
+    border: 1px solid var(--groove-border);
+    border-radius: var(--radius);
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.35);
+    width: min(19rem, 100%);
+  }
+  .segmented button {
+    flex: 1;
+    border: 0;
+    border-radius: 2px;
+    background: transparent;
+    color: var(--ink-dim);
+    padding: 8px 8px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    cursor: pointer;
+    white-space: nowrap;
+    transition:
+      color 140ms ease,
+      background 140ms ease;
+  }
+  .segmented button:hover {
+    color: var(--ink);
+  }
+  .segmented button.selected {
+    color: var(--amber);
+    background: var(--panel-2);
+    box-shadow: var(--panel-etched);
+  }
+  .tab-panel {
+    animation: tab-panel-in 180ms ease-out both;
+  }
+  @keyframes tab-panel-in {
+    from {
+      opacity: 0;
+      transform: translateY(5px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
   }
   .max-volume-control {
     display: flex;
@@ -828,31 +1000,34 @@
   .max-volume-value input[type='text'] {
     width: 4em;
     box-sizing: border-box;
-    font-family: var(--mono);
-    font-size: 14px;
+    font-family: var(--font-mono);
+    font-size: 16px;
     font-weight: 600;
     text-align: center;
-    color: var(--ink);
-    background: var(--bg);
-    border: 1px solid var(--line);
-    border-radius: 5px 0 0 5px;
-    padding: 5px 4px;
+    font-variant-numeric: tabular-nums;
+    color: var(--amber);
+    background: var(--groove);
+    border: 1px solid var(--groove-border);
+    border-radius: var(--radius) 0 0 var(--radius);
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.35);
+    padding: 8px 4px;
   }
   .max-volume-value input[type='text']:focus {
     border-color: var(--amber);
-    outline: 2px solid color-mix(in srgb, var(--amber) 30%, transparent);
+    outline: none;
   }
   .max-volume-unit {
     display: inline-flex;
     align-items: center;
-    padding: 0 7px 0 5px;
-    font-family: var(--mono);
-    font-size: 12px;
+    padding: 0 9px 0 6px;
+    font-family: var(--font-mono);
+    font-size: 10px;
     color: var(--amber);
-    background: var(--surface-2);
+    text-shadow: var(--amber-glow);
+    background: var(--panel-2);
     border: 1px solid var(--line);
     border-left: 0;
-    border-radius: 0 5px 5px 0;
+    border-radius: 0 var(--radius) var(--radius) 0;
   }
   .reset-setting {
     display: inline-flex;
@@ -861,7 +1036,7 @@
     border: 1px solid transparent;
     background: transparent;
     color: var(--ink-dim);
-    border-radius: 4px;
+    border-radius: var(--radius);
     padding: 5px;
     cursor: pointer;
   }
@@ -869,32 +1044,134 @@
     border-color: var(--amber);
     color: var(--amber);
   }
+
   .help {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+    gap: 14px;
   }
   .help section {
-    background: var(--surface);
+    background: var(--panel);
     border: 1px solid var(--line);
-    border-radius: 8px;
-    padding: 14px;
+    border-radius: var(--radius);
+    padding: 18px;
     display: flex;
     flex-direction: column;
-    gap: 7px;
+    gap: 9px;
+    box-shadow: var(--panel-etched);
   }
   .help h3 {
     margin: 0 0 4px;
-    font-family: var(--mono);
-    font-size: 11px;
-    letter-spacing: 0.12em;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 600;
+    line-height: 1.2;
+    letter-spacing: 0.14em;
     text-transform: uppercase;
-    color: var(--ink);
+    color: var(--amber);
   }
   .help p {
     margin: 0;
-    font-size: 13px;
+    font-size: 12px;
     color: var(--ink-dim);
-    line-height: 1.5;
+    line-height: 1.65;
+  }
+
+  button {
+    line-height: 1.2;
+  }
+
+  @media (max-width: 820px) {
+    main {
+      padding: 36px 22px 48px;
+    }
+    .titlebar {
+      align-items: flex-start;
+      flex-direction: column;
+    }
+    .tab-switch {
+      width: 100%;
+    }
+    .tab-switch button {
+      flex: 1;
+      padding-inline: 8px;
+    }
+    .grid {
+      grid-template-columns: 1fr;
+    }
+    .quota-stats {
+      grid-template-columns: 1fr 1fr;
+    }
+  }
+
+  @media (max-width: 520px) {
+    main {
+      padding: 30px 14px 36px;
+    }
+    .titlebar {
+      gap: 18px;
+      margin-bottom: 20px;
+    }
+    .brand-name {
+      font-size: 18px;
+      letter-spacing: 0.14em;
+    }
+    .ver {
+      display: none;
+    }
+    .tab-switch button {
+      font-size: 9px;
+      letter-spacing: 0.04em;
+    }
+    .quota-stats {
+      grid-template-columns: 1fr;
+    }
+    .help {
+      grid-template-columns: 1fr;
+    }
+    .data-management,
+    .management-actions {
+      align-items: stretch;
+      flex-direction: column;
+    }
+    .data-management {
+      gap: 12px;
+      padding: 15px;
+    }
+    .management-actions {
+      flex-wrap: wrap;
+    }
+    .management-actions .hw-btn {
+      flex: 1;
+    }
+    .management-divider {
+      display: none;
+    }
+    .settings-panel,
+    .help section {
+      padding: 15px;
+    }
+    .setting-row {
+      align-items: flex-start;
+      flex-direction: column;
+      justify-content: center;
+      gap: 8px;
+      padding: 13px 0;
+    }
+    .setting-row h3 {
+      flex-basis: auto;
+    }
+    .segmented {
+      width: 100%;
+    }
+    .segmented button {
+      flex: 1;
+      min-width: 0;
+      padding-inline: 6px;
+    }
+    .import-mode {
+      width: 100%;
+    }
   }
 </style>

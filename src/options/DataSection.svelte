@@ -76,7 +76,7 @@
   {:else}
     <div class="list">
       {#each rows as row (row.key)}
-        <div class="row" class:checked={selectable && selected.has(row.key)}>
+        <label class="row" class:checked={selectable && selected.has(row.key)}>
           {#if selectable}
             <input
               type="checkbox"
@@ -88,7 +88,7 @@
             <div class="cell-main" title={row.value}>{row.value}</div>
             <div class="cell-sub">{row.sub}</div>
           </div>
-        </div>
+        </label>
       {/each}
     </div>
     {#if selectable}
@@ -136,40 +136,54 @@
 
 <style>
   .section {
-    background: var(--surface);
+    min-width: 0;
+    background: var(--panel);
     border: 1px solid var(--line);
-    border-radius: 8px;
+    border-radius: var(--radius);
     padding: 14px;
+    box-shadow: var(--panel-etched);
   }
   .head {
     display: flex;
     align-items: center;
     gap: 8px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--line);
   }
   .head h3 {
     margin: 0;
-    font-family: var(--mono);
-    font-size: 11px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 600;
     letter-spacing: 0.12em;
     text-transform: uppercase;
     color: var(--ink-dim);
+    text-shadow: var(--engrave-shadow);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
   .count {
-    background: var(--surface-2);
-    color: var(--ink-dim);
-    font-family: var(--mono);
-    font-size: 10px;
-    padding: 1px 7px;
-    border-radius: 99px;
     flex-shrink: 0;
+    margin-left: auto;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    color: var(--amber);
+    background: var(--groove);
+    border: 1px solid var(--groove-border);
+    border-radius: 2px;
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.3);
+    padding: 2px 7px;
+    line-height: 1.4;
   }
   .empty {
     color: var(--ink-dim);
-    font-size: 12px;
-    margin: 10px 0 0;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    margin: 12px 0 0;
   }
   .list {
     margin-top: 10px;
@@ -184,12 +198,22 @@
     align-items: center;
     gap: 10px;
     padding: 7px 10px;
-    border-radius: 6px;
+    border-radius: 2px;
     background: var(--groove);
-    border: 1px solid transparent;
+    border: 1px solid var(--groove-border);
+    box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.2);
+    cursor: pointer;
+    user-select: text;
+    -webkit-user-select: text;
+    -moz-user-select: text;
+  }
+  .row:hover {
+    border-color: var(--line-strong);
   }
   .row.checked {
-    border-color: var(--amber);
+    box-shadow:
+      inset 2px 0 0 var(--amber),
+      inset 0 1px 1px rgba(0, 0, 0, 0.2);
   }
   .row input[type='checkbox'] {
     accent-color: var(--amber);
@@ -207,8 +231,8 @@
     white-space: nowrap;
   }
   .cell-sub {
-    font-family: var(--mono);
-    font-size: 10px;
+    font-family: var(--font-mono);
+    font-size: 9.5px;
     color: var(--ink-dim);
     margin-top: 1px;
     line-height: 1.45;
@@ -217,6 +241,8 @@
   }
   .actions {
     margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid var(--line);
     display: flex;
     gap: 8px;
     justify-content: flex-end;
@@ -224,28 +250,31 @@
   .overlay {
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.45);
+    background: rgba(4, 7, 10, 0.6);
+    backdrop-filter: blur(3px);
     display: flex;
     align-items: center;
     justify-content: center;
     z-index: 50;
   }
   .dialog {
-    background: var(--surface);
+    background: var(--panel);
     border: 1px solid var(--line);
-    border-radius: 10px;
+    border-radius: var(--radius);
     padding: 16px;
     min-width: 260px;
     max-width: 90vw;
-    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.25);
+    box-shadow: var(--shadow-dialog);
   }
   .dialog h4 {
     margin: 0 0 8px;
-    font-family: var(--mono);
-    font-size: 11px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 600;
     letter-spacing: 0.12em;
     text-transform: uppercase;
     color: var(--ink-dim);
+    text-shadow: var(--engrave-shadow);
   }
   .dialog p {
     margin: 0;
@@ -254,7 +283,7 @@
   }
   .dialog .n {
     color: var(--ink-dim);
-    font-family: var(--mono);
+    font-family: var(--font-mono);
     font-size: 12px;
   }
   .dialog-actions {
@@ -264,13 +293,22 @@
     gap: 8px;
   }
   button {
-    font-size: 11px;
-    padding: 5px 12px;
-    border-radius: 6px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    line-height: 1.2;
+    padding: 7px 12px;
+    border-radius: var(--radius);
     border: 1px solid var(--line);
-    background: var(--surface-2);
-    color: var(--ink);
+    background: var(--panel-2);
+    color: var(--ink-dim);
     cursor: pointer;
+    transition:
+      color 120ms ease,
+      border-color 120ms ease,
+      background 120ms ease;
   }
   button:hover {
     border-color: var(--amber);
@@ -282,10 +320,10 @@
   }
   button.danger:hover {
     background: var(--red);
-    color: #fff;
+    color: var(--amber-fg);
   }
   button:disabled {
-    opacity: 0.4;
+    opacity: 0.35;
     cursor: not-allowed;
   }
 </style>

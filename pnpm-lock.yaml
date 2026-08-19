@@ -206,6 +206,10 @@ settings:
 importers:
 
   .:
+    dependencies:
+      '@fontsource/rajdhani':
+        specifier: ^5.3.0
+        version: 5.3.0
     devDependencies:
       '@eslint/js':
         specifier: ^10.0.1
@@ -523,6 +527,9 @@ packages:
   '@fluent/syntax@0.19.0':
     resolution: {integrity: sha512-5D2qVpZrgpjtqU4eNOcWGp1gnUCgjfM+vKGE2y03kKN6z5EBhtx0qdRFbg8QuNNj8wXNoX93KJoYb+NqoxswmQ==}
     engines: {node: '>=14.0.0', npm: '>=7.0.0'}
+
+  '@fontsource/rajdhani@5.3.0':
+    resolution: {integrity: sha512-oBJgSIibWJvVBKseme1JczqPLoDHN97LHti4uh0LjfcJqQoVmnQQlRKIpEjTJV559rmVQ6qbVZZwKwk2wkBTtw==}
 
   '@fregante/relaxed-json@2.0.0':
     resolution: {integrity: sha512-PyUXQWB42s4jBli435TDiYuVsadwRHnMc27YaLouINktvTWsL3FcKrRMGawTayFk46X+n5bE23RjUTWQwrukWw==}
@@ -2931,6 +2938,8 @@ snapshots:
       levn: 0.4.1
 
   '@fluent/syntax@0.19.0': {}
+
+  '@fontsource/rajdhani@5.3.0': {}
 
   '@fregante/relaxed-json@2.0.0': {}
 

@@ -33,6 +33,7 @@
   const activeSource: ActiveSource = $derived(
     muted ? 'mute' : hasPageVol ? 'page' : hasSiteVol ? 'site' : 'default',
   );
+
   type IconState = 'mute' | 'low' | 'normal' | 'boost';
   const activeVol = $derived(
     activeSource === 'page'
@@ -158,6 +159,25 @@
     void siteVolumesStore.flushPending();
   }
 
+  type FaderKind = 'page' | 'site';
+
+  function commitVolumeInput(kind: FaderKind, raw: string): void {
+    if (!/^\d+$/.test(raw.trim())) return;
+    const pct = Number(raw.trim());
+    const maxPct = Math.round(settings.maxMultiplier * 100);
+    const v = Math.min(pct, maxPct) / 100;
+    if (kind === 'page') setPageVol(v);
+    else setSiteVol(v);
+  }
+
+  function selectOnFocus(e: FocusEvent): void {
+    (e.target as HTMLInputElement).select();
+  }
+
+  function commitOnEnter(e: KeyboardEvent): void {
+    if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+  }
+
   function openOptions(): void {
     void browser.runtime.openOptionsPage();
     window.close();
@@ -202,15 +222,15 @@
       class:on={hostname && activeSource === 'page'}
       class:on-site={hostname && activeSource === 'site'}
       class:alert={hostname && activeSource === 'mute'}
+      aria-hidden="true"
       viewBox="0 1.8 29 20.5"
-      width="18.4"
-      height="13"
+      width="26"
+      height="18.4"
       fill="none"
       stroke="currentColor"
       stroke-width="2"
       stroke-linecap="round"
       stroke-linejoin="round"
-      title={hostname ? (muted ? 'MUTE' : hasPageVol || hasSiteVol ? 'LIVE' : 'IDLE') : ''}
     >
       <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" fill="currentColor" stroke="none" />
       {#if iconState === 'mute'}
@@ -234,24 +254,24 @@
       <span class="site-host">{hostname}</span>
     </div>
 
-    <section class="strip mute-card" class:muted>
+    <section class="strip mute-active" class:active={activeSource === 'mute'}>
       <div class="row">
-        <span class="indicator" class:red={muted}></span>
         <span class="ch-label">{tr('autoMute')}</span>
-        <label class="switch">
-          <input
-            type="checkbox"
-            checked={muted}
-            onchange={(e) => toggleMute((e.target as HTMLInputElement).checked)}
-          />
+        <button
+          type="button"
+          class="switch"
+          role="switch"
+          aria-checked={muted}
+          aria-label={tr('autoMute')}
+          onclick={() => toggleMute(!muted)}
+        >
           <span class="switch-track"><span class="switch-thumb"></span></span>
-        </label>
+        </button>
       </div>
     </section>
 
-    <section class="strip">
+    <section class="strip page-active" class:active={activeSource === 'page'}>
       <div class="row">
-        <span class="indicator" class:page={!muted && activeSource === 'page'}></span>
         <span class="ch-label">{tr('pageVolume')}</span>
         <button
           class="clear"
@@ -274,10 +294,19 @@
             <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
           </svg>
         </button>
-        <span class="led" class:led-dim={muted}
-          >{Math.round(Math.min(pageVol, settings.maxMultiplier) * 100)}<span class="pct">%</span
-          ></span
-        >
+        <div class="led-well" class:led-dim={muted}>
+          <input
+            class="led"
+            type="text"
+            inputmode="decimal"
+            value={Math.round(Math.min(pageVol, settings.maxMultiplier) * 100)}
+            aria-label={tr('pageVolume')}
+            onfocus={selectOnFocus}
+            onkeydown={commitOnEnter}
+            onchange={(e) => commitVolumeInput('page', (e.target as HTMLInputElement).value)}
+          />
+          <span class="pct">%</span>
+        </div>
       </div>
       <div
         class="fader"
@@ -293,8 +322,10 @@
           onchange={flushSliders}
         />
       </div>
-      <div class="row divider">
-        <span class="indicator" class:on-site={!muted && activeSource === 'site'}></span>
+    </section>
+
+    <section class="strip site-active" class:active={activeSource === 'site'}>
+      <div class="row">
         <span class="ch-label">{tr('siteVolume')}</span>
         <button
           class="clear"
@@ -317,10 +348,19 @@
             <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
           </svg>
         </button>
-        <span class="led" class:led-dim={muted}
-          >{Math.round(Math.min(siteVol, settings.maxMultiplier) * 100)}<span class="pct">%</span
-          ></span
-        >
+        <div class="led-well" class:led-dim={muted}>
+          <input
+            class="led"
+            type="text"
+            inputmode="decimal"
+            value={Math.round(Math.min(siteVol, settings.maxMultiplier) * 100)}
+            aria-label={tr('siteVolume')}
+            onfocus={selectOnFocus}
+            onkeydown={commitOnEnter}
+            onchange={(e) => commitVolumeInput('site', (e.target as HTMLInputElement).value)}
+          />
+          <span class="pct">%</span>
+        </div>
       </div>
       <div
         class="fader"
@@ -337,77 +377,22 @@
         />
       </div>
     </section>
-
-    <footer>
-      <span class="ver">{versionLabel}</span>
-      <button class="link" onclick={openOptions}>{tr('openOptions')}</button>
-    </footer>
   {:else}
     <p class="empty">{tabTitle}</p>
   {/if}
+
+  <footer>
+    <span class="ver">{versionLabel}</span>
+    <button class="link" onclick={openOptions}>{tr('openOptions')}</button>
+  </footer>
 </main>
 
 <style>
-  :global(:root) {
-    --bg: #e9e7e1;
-    --surface: #f5f3ee;
-    --surface-2: #e7e4dd;
-    --groove: #d6d2c8;
-    --ink: #26292f;
-    --ink-dim: #6f7580;
-    --amber: #b06500;
-    --amber-glow: transparent;
-    --green: #158f63;
-    --red: #c84a3c;
-    --line: #d4d0c6;
-    --glow: none;
-  }
-  :global(:root[data-theme='dark']) {
-    --bg: #14161a;
-    --surface: #1d2026;
-    --surface-2: #262b33;
-    --groove: #0e1013;
-    --ink: #e6e8eb;
-    --ink-dim: #8a909c;
-    --amber: #ffaf4d;
-    --amber-glow: 0 0 10px rgba(255, 175, 77, 0.35);
-    --green: #3ecf8e;
-    --red: #e5604f;
-    --line: #2a2f38;
-    --glow: 0 0 5px currentColor;
-  }
-  @media (prefers-color-scheme: dark) {
-    :global(:root:not([data-theme])) {
-      --bg: #14161a;
-      --surface: #1d2026;
-      --surface-2: #262b33;
-      --groove: #0e1013;
-      --ink: #e6e8eb;
-      --ink-dim: #8a909c;
-      --amber: #ffaf4d;
-      --amber-glow: 0 0 10px rgba(255, 175, 77, 0.35);
-      --green: #3ecf8e;
-      --red: #e5604f;
-      --line: #2a2f38;
-      --glow: 0 0 5px currentColor;
-    }
-  }
-  :global(:root) {
-    --mono: ui-monospace, 'SF Mono', 'Cascadia Mono', Menlo, Consolas, monospace;
-    --sans: system-ui, -apple-system, 'Segoe UI', sans-serif;
-  }
-  :global(html),
-  :global(body) {
-    margin: 0;
-    padding: 0;
-    background: var(--bg);
-  }
-
   main {
-    width: 300px;
+    width: 344px;
     max-width: 100%;
-    padding: 12px;
-    font-family: var(--sans);
+    padding: 14px;
+    font-family: var(--font-sans);
     background: var(--bg);
     color: var(--ink);
     box-sizing: border-box;
@@ -421,10 +406,13 @@
     border-bottom: 1px solid var(--line);
   }
   .brand-name {
-    font-family: var(--mono);
-    font-size: 11px;
-    letter-spacing: 0.18em;
+    font-family: var(--font-display);
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: 0.26em;
+    line-height: 1;
     color: var(--ink);
+    text-shadow: var(--engrave-shadow);
   }
   .brand-mark {
     color: var(--ink-dim);
@@ -435,30 +423,33 @@
   }
   .brand-mark.on {
     color: var(--green);
+    filter: drop-shadow(var(--green-glow));
   }
   .brand-mark.on-site {
     color: var(--amber);
+    filter: drop-shadow(var(--amber-glow));
   }
   .brand-mark.alert {
     color: var(--red);
+    filter: drop-shadow(var(--red-glow));
   }
 
   .site {
-    padding: 10px 2px 4px;
+    padding: 10px 2px 6px;
     display: flex;
     flex-direction: column;
-    gap: 1px;
+    gap: 2px;
   }
   .site-name {
-    font-size: 13px;
+    font-size: 14px;
     font-weight: 600;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
   .site-host {
-    font-family: var(--mono);
-    font-size: 10px;
+    font-family: var(--font-mono);
+    font-size: 11px;
     letter-spacing: 0.04em;
     color: var(--ink-dim);
     overflow: hidden;
@@ -468,13 +459,26 @@
 
   .strip {
     margin-top: 8px;
-    background: var(--surface);
+    background: var(--panel);
     border: 1px solid var(--line);
-    border-radius: 8px;
-    padding: 10px 12px;
+    border-radius: var(--radius);
+    box-shadow: var(--panel-etched);
+    padding: 12px 14px;
   }
-  .mute-card.muted {
-    border-color: var(--red);
+  .strip.active {
+    background: var(--panel-2);
+    box-shadow:
+      var(--panel-etched),
+      inset 3px 0 0 var(--active-color);
+  }
+  .strip.active.mute-active {
+    --active-color: var(--red);
+  }
+  .strip.active.page-active {
+    --active-color: var(--green);
+  }
+  .strip.active.site-active {
+    --active-color: var(--amber);
   }
 
   .row {
@@ -482,135 +486,163 @@
     align-items: center;
     gap: 8px;
   }
-  .row.divider {
-    border-top: 1px solid var(--line);
-    margin-top: 10px;
-    padding-top: 10px;
-  }
   .ch-label {
-    font-family: var(--mono);
-    font-size: 11px;
+    flex: 1;
+    min-width: 0;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    font-weight: 700;
     letter-spacing: 0.08em;
     text-transform: uppercase;
-    color: var(--ink-dim);
+    color: var(--ink);
+    text-shadow: var(--engrave-shadow);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
-  .indicator {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: var(--line);
-    box-shadow: var(--glow);
+  .switch {
+    display: inline-flex;
+    align-items: center;
     flex-shrink: 0;
+    padding: 0;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+  }
+  .switch-track {
+    display: flex;
+    align-items: center;
+    width: 44px;
+    height: 22px;
+    box-sizing: border-box;
+    padding: 2px;
+    border-radius: 2px;
+    background: var(--groove);
+    border: 1px solid var(--groove-border);
     transition:
-      background 0.2s,
-      box-shadow 0.2s;
+      background 0.15s,
+      border-color 0.15s;
   }
-  .indicator.page {
-    background: var(--green);
-    color: var(--green);
+  .switch-thumb {
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+    box-sizing: border-box;
+    border-radius: 1px;
+    background: var(--fader-knob);
+    border: 1px solid var(--line-strong);
+    transition:
+      margin-left 0.15s,
+      background 0.15s,
+      border-color 0.15s;
   }
-  .indicator.on-site {
-    background: var(--amber);
-    color: var(--amber);
-  }
-  .indicator.red {
+  .switch[aria-checked='true'] .switch-track {
     background: var(--red);
-    color: var(--red);
   }
-
-  .led {
-    font-family: var(--mono);
-    font-size: 16px;
-    font-weight: 600;
-    line-height: 1;
-    color: var(--amber);
-    text-shadow: var(--amber-glow);
-    font-variant-numeric: tabular-nums;
-    min-width: 52px;
-    text-align: right;
+  .switch[aria-checked='true'] .switch-thumb {
     margin-left: auto;
   }
-  .led-dim {
-    color: var(--ink-dim);
-    text-shadow: none;
+
+  .led-well {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 1px;
+    flex-shrink: 0;
+    width: 50px;
+    height: 18px;
+    box-sizing: border-box;
+    background: var(--groove);
+    border-radius: 2px;
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.35);
+    padding: 0 6px;
+  }
+  .led-well:focus-within {
+    outline: 2px solid var(--amber);
+    outline-offset: 1px;
+  }
+  .led {
+    width: 100%;
+    min-width: 0;
+    padding: 1px 0 0 0;
+    border: none;
+    background: transparent;
+    font-family: var(--font-mono);
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 1;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    color: var(--amber);
+    text-shadow: var(--amber-glow);
+  }
+  .led:focus-visible {
+    outline: none;
   }
   .pct {
     font-size: 10px;
-    margin-left: 2px;
-    color: inherit;
+    color: var(--amber);
+    text-shadow: var(--amber-glow);
   }
-
-  .switch {
-    display: flex;
-    align-items: center;
-    cursor: pointer;
-    margin-left: auto;
-    flex-shrink: 0;
-  }
-  .switch input {
-    display: none;
-  }
-  .switch-track {
-    width: 36px;
-    height: 20px;
-    border-radius: 10px;
-    background: var(--groove);
-    position: relative;
-    transition: background 0.2s;
-    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.25);
-  }
-  .switch-thumb {
-    position: absolute;
-    top: 2px;
-    left: 2px;
-    width: 16px;
-    height: 16px;
-    box-sizing: border-box;
-    border-radius: 50%;
-    background: var(--surface-2);
-    border: 1px solid var(--line);
-    transition: transform 0.2s;
-  }
-  .switch input:checked + .switch-track {
-    background: var(--red);
-  }
-  .switch input:checked + .switch-track .switch-thumb {
-    transform: translateX(16px);
+  .led-well.led-dim .led,
+  .led-well.led-dim .pct {
+    color: var(--ink-dim);
+    text-shadow: none;
   }
 
   .fader {
-    margin-top: 6px;
+    margin-top: 8px;
     height: 18px;
     display: flex;
     align-items: center;
+    position: relative;
+    touch-action: none;
   }
   .fader input[type='range'] {
     -webkit-appearance: none;
     appearance: none;
     width: 100%;
-    height: 6px;
-    border-radius: 3px;
-    background: linear-gradient(90deg, var(--amber) var(--val, 0%), var(--groove) var(--val, 0%));
-    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.3);
+    height: 18px;
+    margin: 0;
+    background: transparent;
     cursor: pointer;
-    outline-offset: 3px;
+  }
+  .fader input[type='range']::-webkit-slider-runnable-track {
+    height: 6px;
+    border-radius: 2px;
+    background: linear-gradient(90deg, var(--amber) var(--val, 0%), var(--groove) var(--val, 0%));
+    border: 1px solid var(--groove-border);
+    box-sizing: border-box;
   }
   .fader input[type='range']::-webkit-slider-thumb {
     -webkit-appearance: none;
     appearance: none;
-    width: 14px;
-    height: 20px;
-    border-radius: 3px;
-    background: var(--surface-2);
-    border: 1px solid var(--amber);
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+    width: 12px;
+    height: 18px;
+    border-radius: 2px;
+    background: var(--fader-knob);
+    border: 1px solid var(--line-strong);
+    box-sizing: border-box;
+  }
+  .fader input[type='range']::-moz-range-track {
+    height: 6px;
+    border-radius: 2px;
+    background: linear-gradient(90deg, var(--amber) var(--val, 0%), var(--groove) var(--val, 0%));
+    border: 1px solid var(--groove-border);
+    box-sizing: border-box;
+  }
+  .fader input[type='range']::-moz-range-thumb {
+    width: 12px;
+    height: 18px;
+    border-radius: 2px;
+    background: var(--fader-knob);
+    border: 1px solid var(--line-strong);
+    box-sizing: border-box;
   }
   .fader input[type='range']:focus-visible {
     outline: 2px solid var(--amber);
+    outline-offset: 1px;
   }
 
   .clear {
@@ -622,12 +654,12 @@
     line-height: 1;
     cursor: pointer;
     padding: 3px 5px;
-    border-radius: 4px;
+    border-radius: var(--radius);
     flex-shrink: 0;
-    margin-left: -5px;
+    margin-right: 2px;
   }
   .clear:hover {
-    color: var(--ink);
+    color: var(--amber);
     border-color: var(--line);
   }
   .clear.resetting {
@@ -656,44 +688,30 @@
     justify-content: space-between;
   }
   .ver {
-    font-family: var(--mono);
+    font-family: var(--font-mono);
     font-size: 10px;
     letter-spacing: 0.08em;
-    color: var(--ink-dim);
+    color: var(--ink-faint);
     padding: 2px 4px;
   }
   .link {
     border: none;
     background: none;
-    font-family: var(--mono);
-    font-size: 10px;
-    letter-spacing: 0.12em;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
     color: var(--ink-dim);
     cursor: pointer;
     padding: 2px 4px;
-    border-radius: 4px;
+    border-radius: var(--radius);
   }
   .link:hover {
     color: var(--amber);
   }
   .empty {
     margin: 14px 2px;
-    font-size: 12px;
+    font-size: 13px;
     color: var(--ink-dim);
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .brand-mark,
-    .indicator,
-    .switch-track,
-    .switch-thumb {
-      transition: none;
-    }
-    .clear.resetting svg {
-      animation: none;
-    }
-    .clear.resetting {
-      transition: none;
-    }
   }
 </style>
