@@ -318,9 +318,12 @@
           max={settings.maxMultiplier}
           step="0.01"
           value={Math.min(pageVol, settings.maxMultiplier)}
+          aria-label={tr('pageVolume')}
           oninput={(e) => setPageVol(Number((e.target as HTMLInputElement).value))}
           onchange={flushSliders}
         />
+        <span class="fader-track" aria-hidden="true"><span class="fader-fill"></span></span>
+        <span class="fader-thumb" aria-hidden="true"></span>
       </div>
     </section>
 
@@ -372,9 +375,12 @@
           max={settings.maxMultiplier}
           step="0.01"
           value={Math.min(siteVol, settings.maxMultiplier)}
+          aria-label={tr('siteVolume')}
           oninput={(e) => setSiteVol(Number((e.target as HTMLInputElement).value))}
           onchange={flushSliders}
         />
+        <span class="fader-track" aria-hidden="true"><span class="fader-fill"></span></span>
+        <span class="fader-thumb" aria-hidden="true"></span>
       </div>
     </section>
   {:else}
@@ -592,55 +598,65 @@
   }
 
   .fader {
+    position: relative;
     margin-top: 8px;
     height: 18px;
-    display: flex;
-    align-items: center;
-    position: relative;
     touch-action: none;
   }
+  /* Transparent native input overlays the visuals to keep dragging, keyboard
+     arrows and touch working without custom-draw geometry. */
   .fader input[type='range'] {
-    -webkit-appearance: none;
-    appearance: none;
+    position: absolute;
+    inset: 0;
     width: 100%;
-    height: 18px;
+    height: 100%;
     margin: 0;
-    background: transparent;
+    opacity: 0;
     cursor: pointer;
+    touch-action: none;
   }
-  .fader input[type='range']::-webkit-slider-runnable-track {
+  /* Track and thumb are centered with standard CSS (top:50% + translateY), so
+     the thumb always sits flush on the track across browsers. pointer-events
+     none lets clicks/drags fall through to the transparent input below. */
+  .fader-track {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 50%;
+    transform: translateY(-50%);
     height: 6px;
     border-radius: 2px;
-    background: linear-gradient(90deg, var(--amber) var(--val, 0%), var(--groove) var(--val, 0%));
     border: 1px solid var(--groove-border);
+    background: var(--groove);
     box-sizing: border-box;
+    overflow: hidden;
+    pointer-events: none;
   }
-  .fader input[type='range']::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    appearance: none;
+  .fader-fill {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: var(--val);
+    background: var(--amber);
+    box-sizing: border-box;
+    pointer-events: none;
+  }
+  .fader-thumb {
+    position: absolute;
+    top: 50%;
+    left: var(--val);
     width: 12px;
     height: 18px;
+    transform: translate(-50%, -50%);
     border-radius: 2px;
     background: var(--fader-knob);
     border: 1px solid var(--line-strong);
     box-sizing: border-box;
+    pointer-events: none;
   }
-  .fader input[type='range']::-moz-range-track {
-    height: 6px;
-    border-radius: 2px;
-    background: linear-gradient(90deg, var(--amber) var(--val, 0%), var(--groove) var(--val, 0%));
-    border: 1px solid var(--groove-border);
-    box-sizing: border-box;
-  }
-  .fader input[type='range']::-moz-range-thumb {
-    width: 12px;
-    height: 18px;
-    border-radius: 2px;
-    background: var(--fader-knob);
-    border: 1px solid var(--line-strong);
-    box-sizing: border-box;
-  }
-  .fader input[type='range']:focus-visible {
+  /* Keyboard focus only: a mouse/touch drag must not paint a ring. */
+  .fader:has(input:focus-visible) {
     outline: 2px solid var(--amber);
     outline-offset: 1px;
   }
