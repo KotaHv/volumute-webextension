@@ -61,7 +61,7 @@ function gainNodeFor(ctx: AudioContext): GainNode {
   return createGainNode(ctx);
 }
 
-export function setVolume(volume: number): void {
+function setAllGains(volume: number): void {
   targetVolume = volume;
   for (const gain of controlledGains) {
     if (gain.context.state === 'closed') {
@@ -101,6 +101,19 @@ export class AudioController {
     }
   }
 
+  private resumeContext(): void {
+    try {
+      void this.ctx?.resume().catch(() => {});
+    } catch {
+      /* ignore */
+    }
+  }
+
+  setVolume(volume: number): void {
+    if (volume > 0) this.resumeContext();
+    setAllGains(volume);
+  }
+
   captureMediaElement(el: HTMLMediaElement): void {
     if (this.knownElements.has(el)) return;
     this.knownElements.add(el);
@@ -123,6 +136,12 @@ export class AudioController {
       real[GAIN_KEY] = toPageObject(gain);
       this.capturedCount++;
       console.log('[VoluMute] media element captured');
+      // These fire inside the user gesture that starts playback or unmutes the
+      // element, which is when resuming a suspended context is allowed.
+      el.addEventListener('play', () => this.resumeContext());
+      el.addEventListener('volumechange', () => {
+        if (!el.muted && targetVolume > 0) this.resumeContext();
+      });
     } catch (err) {
       /* element already captured by the page itself */
       console.warn('[VoluMute] media element capture failed:', err);
