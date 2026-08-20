@@ -49,11 +49,15 @@ export async function applyMuteToTab(tab: browser.Tabs.Tab): Promise<void> {
   if (!hostname) return;
   const isMuted = tab.mutedInfo?.muted ?? false;
   const shouldMute = await effectiveShouldMute(tab.id, tab.url ?? tab.pendingUrl ?? '');
+  const pluginMuted = tab.mutedInfo?.reason === 'extension';
 
-  if (isMuted === shouldMute && tabMuteSupported === true) return;
-
+  if (isMuted === shouldMute) return;
   if (tabMuteSupported === null || tabMuteSupported === true) {
-    await setTabMuted(tab.id, shouldMute);
+    // Only act in the direction the extension rules demand: mute when they
+    // require it, and unmute only when the silence is ours. Browser/user
+    // muting (e.g. reason 'user', 'capture', or a user choice lost with a
+    // cleared session) must not be flipped by the extension.
+    if (shouldMute || pluginMuted) await setTabMuted(tab.id, shouldMute);
   }
   // tabMuteSupported === false: nothing to mutate natively; the volume layer
   // pushes gain 0 for muted tabs.

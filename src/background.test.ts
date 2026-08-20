@@ -321,6 +321,55 @@ describe('background entry', () => {
       expect(mocks.browser.tabs.sendMessage).not.toHaveBeenCalled();
       expect(mocks.autoMutedStore.touchEntry).not.toHaveBeenCalled();
     });
+
+    it('does not unmute a tab muted by the browser or the user', async () => {
+      await applyMuteToTab(
+        makeTab({
+          id: 6,
+          url: 'https://example.com/page',
+          mutedInfo: { muted: true, reason: 'user' },
+        }),
+      );
+
+      expect(mocks.browser.tabs.update).not.toHaveBeenCalled();
+    });
+
+    it('does not unmute a tab muted for capture', async () => {
+      await applyMuteToTab(
+        makeTab({
+          id: 7,
+          url: 'https://example.com/page',
+          mutedInfo: { muted: true, reason: 'capture' },
+        }),
+      );
+
+      expect(mocks.browser.tabs.update).not.toHaveBeenCalled();
+    });
+
+    it('unmutes a tab the extension muted when its rule no longer applies', async () => {
+      mocks.autoMutedStore.snapshot.mockReturnValue({
+        'example.com': { enabled: true },
+      });
+      await applyMuteToTab(
+        makeTab({
+          id: 8,
+          url: 'https://example.com/page',
+          mutedInfo: { muted: false },
+        }),
+      );
+      mocks.browser.tabs.update.mockClear();
+      mocks.autoMutedStore.snapshot.mockReturnValue({});
+
+      await applyMuteToTab(
+        makeTab({
+          id: 8,
+          url: 'https://example.com/page',
+          mutedInfo: { muted: true, reason: 'extension' },
+        }),
+      );
+
+      expect(mocks.browser.tabs.update).toHaveBeenCalledWith(8, { muted: false });
+    });
   });
 
   describe('vm:volume-query', () => {
@@ -359,10 +408,14 @@ describe('background entry', () => {
 
     it('answers with gain 0 for a muted tab in fallback mode', async () => {
       mocks.browser.tabs.update.mockRejectedValue(new Error('unsupported'));
+      // Trigger the fallback probe with a tab the extension must mute.
+      mocks.autoMutedStore.snapshot.mockReturnValue({
+        'probe.test': { enabled: true },
+      });
       await applyMuteToTab(
         makeTab({
           id: 99,
-          url: 'https://example.com/probe',
+          url: 'https://probe.test/x',
           mutedInfo: { muted: false },
         }),
       );
