@@ -8,153 +8,126 @@ type AnyRecord = Record<string, unknown>;
 // extension reloads, since Xray wrapper expandos do not pass through. On
 // Chrome the audio script runs in the MAIN world, where the element is
 // already the page object.
-function pageMark(el: HTMLMediaElement): AnyRecord {
-  const real = (el as unknown as { wrappedJSObject?: AnyRecord }).wrappedJSObject;
-  return (real ?? el) as unknown as AnyRecord;
+function pageObject(el: HTMLMediaElement): AnyRecord {
+  return toPageObject(el) as unknown as AnyRecord;
 }
 
-function isRouted(el: HTMLMediaElement): boolean {
-  return pageMark(el)[ROUTED_KEY] === true;
+function isCaptured(el: HTMLMediaElement): boolean {
+  return pageObject(el)[ROUTED_KEY] === true;
 }
 
-// Unwrap to the underlying page object so identity checks work across
-// realms (an Xray wrapper and the raw object are not ===).
-function unwrap<T>(obj: T): T {
+// Unwrap to the underlying page object so identity checks work across realms
+// (an Xray wrapper and the raw object are not ===).
+function toPageObject<T>(obj: T): T {
   const real = (obj as unknown as { wrappedJSObject?: T }).wrappedJSObject;
   return (real ?? obj) as T;
 }
 
-let currentVolume = 1;
+let targetVolume = 1;
 
-// Per-realm registry: only this instance's own gains plus gains adopted
-// from already-routed media elements after an extension reload.
-const gains = new Set<GainNode>();
+// Gain nodes of every AudioContext this realm controls; media elements feed
+// into destination through them. After an extension reload the previous
+// instance's gains are taken over (their contexts are still alive), hence a
+// set rather than a single variable.
+const controlledGains = new Set<GainNode>();
 
 // Content scripts cannot assign functions to page objects (Xray vision), so
-// this is always the pristine native connect in every instance.
-const ORIG_CONNECT = AudioNode.prototype.connect as unknown as ConnectFn;
+// connect is always the pristine native implementation.
+const NATIVE_CONNECT = AudioNode.prototype.connect as unknown as ConnectFn;
 
-// One shared gain per AudioContext.
-function buildRoute(ctx: AudioContext): GainNode {
+// One volume control point per AudioContext, reused once created.
+function createGainNode(ctx: AudioContext): GainNode {
   const gain = ctx.createGain();
-  gain.gain.value = currentVolume;
-  ORIG_CONNECT.call(gain, ctx.destination);
-  gains.add(gain);
+  gain.gain.value = targetVolume;
+  NATIVE_CONNECT.call(gain, ctx.destination);
+  controlledGains.add(gain);
   ctx.addEventListener('statechange', () => {
-    if (ctx.state === 'closed') gains.delete(gain);
+    if (ctx.state === 'closed') controlledGains.delete(gain);
   });
   return gain;
 }
 
-function routeFor(ctx: AudioContext): GainNode {
-  const rawCtx = unwrap(ctx);
-  for (const gain of gains) {
-    if (unwrap(gain.context) === rawCtx) {
+function gainNodeFor(ctx: AudioContext): GainNode {
+  const rawCtx = toPageObject(ctx);
+  for (const gain of controlledGains) {
+    if (toPageObject(gain.context) === rawCtx) {
       if (ctx.state === 'closed') {
-        gains.delete(gain);
+        controlledGains.delete(gain);
         break;
       }
       return gain;
     }
   }
-  return buildRoute(ctx);
+  return createGainNode(ctx);
 }
 
-export function setAllVolume(volume: number): void {
-  currentVolume = volume;
-  for (const gain of gains) {
+export function setVolume(volume: number): void {
+  targetVolume = volume;
+  for (const gain of controlledGains) {
     if (gain.context.state === 'closed') {
-      gains.delete(gain);
+      controlledGains.delete(gain);
       continue;
     }
     try {
       const ctxTime = gain.context.currentTime;
-      const param = gain.gain;
-      param.cancelScheduledValues(ctxTime);
-      param.setTargetAtTime(volume, ctxTime, 0.03);
+      gain.gain.cancelScheduledValues(ctxTime);
+      gain.gain.setTargetAtTime(volume, ctxTime, 0.03);
     } catch {
       /* ignore */
     }
   }
-  console.log(`[VoluMute] gain -> ${volume} (gains: ${gains.size})`);
+  console.log(`[VoluMute] gain -> ${volume} (gains: ${controlledGains.size})`);
 }
 
 export class AudioController {
   private ctx: AudioContext | null = null;
-  private wrapped = new WeakSet<HTMLMediaElement>();
-  private suspended: boolean | null = null;
-  private captured = 0;
-  // Contexts adopted from a previous extension instance (media already
-  // routed): their suspend/resume state is unreachable otherwise, and a
-  // suspended context stays silent no matter what the gain says.
-  private adopted = new Set<AudioContext>();
+  private knownElements = new WeakSet<HTMLMediaElement>();
+  private capturedCount = 0;
 
-  private ensure(): boolean {
+  private ensureContext(): boolean {
     if (this.ctx) return true;
-    const win = window as unknown as { AudioContext?: typeof AudioContext; webkitAudioContext?: typeof AudioContext };
+    const win = window as unknown as {
+      AudioContext?: typeof AudioContext;
+      webkitAudioContext?: typeof AudioContext;
+    };
     const Ctor = win.AudioContext ?? win.webkitAudioContext;
     if (!Ctor) return false;
     try {
       this.ctx = new Ctor();
-      routeFor(this.ctx);
+      gainNodeFor(this.ctx);
       return true;
     } catch {
       return false;
     }
   }
 
-  setVolume(volume: number): void {
-    if (volume === 0) {
-      this.suspended = true;
-    } else {
-      this.suspended = false;
-      if (this.captured > 0 && this.ensure()) {
-        void this.ctx?.resume();
-      }
-      for (const adopted of this.adopted) {
-        void adopted.resume().catch(() => {});
-      }
-    }
-    setAllVolume(volume);
-  }
-
-  wrapMediaElement(el: HTMLMediaElement): void {
-    if (this.wrapped.has(el)) return;
-    this.wrapped.add(el);
-    if (isRouted(el)) {
+  captureMediaElement(el: HTMLMediaElement): void {
+    if (this.knownElements.has(el)) return;
+    this.knownElements.add(el);
+    if (isCaptured(el)) {
       // Routed by a previous extension instance: adopt its gain so volume
       // changes keep reaching the existing audio path.
-      const stored = pageMark(el)[GAIN_KEY];
+      const stored = pageObject(el)[GAIN_KEY];
       if (stored && typeof stored === 'object' && 'gain' in stored) {
-        const gain = stored as GainNode;
-        gains.add(gain);
-        this.adopted.add(unwrap(gain.context) as AudioContext);
+        controlledGains.add(stored as GainNode);
       }
       return;
     }
-    if (!this.ensure() || !this.ctx) return;
+    if (!this.ensureContext() || !this.ctx) return;
     try {
       const src = this.ctx.createMediaElementSource(el);
-      const route = routeFor(this.ctx);
-      ORIG_CONNECT.call(src as AudioNode, route as AudioNode);
-      const real = pageMark(el);
+      const gain = gainNodeFor(this.ctx);
+      NATIVE_CONNECT.call(src as AudioNode, gain as AudioNode);
+      const real = pageObject(el);
       real[ROUTED_KEY] = true;
-      real[GAIN_KEY] = unwrap(route);
-      this.captured++;
+      real[GAIN_KEY] = toPageObject(gain);
+      this.capturedCount++;
       console.log('[VoluMute] media element captured');
-      const resume = () => {
-        try {
-          if (this.suspended !== true) void this.ctx?.resume();
-        } catch {
-          /* ignore */
-        }
-      };
-      el.addEventListener('play', resume);
     } catch (err) {
       /* element already captured by the page itself */
       console.warn('[VoluMute] media element capture failed:', err);
-      pageMark(el)[ROUTED_KEY] = true;
-      if (this.captured === 0 && this.ctx) {
+      pageObject(el)[ROUTED_KEY] = true;
+      if (this.capturedCount === 0 && this.ctx) {
         void this.ctx.close();
         this.ctx = null;
       }
@@ -163,12 +136,12 @@ export class AudioController {
 }
 
 export function hookMediaElements(controller: AudioController): void {
-  const wrap = (el: Element) => {
-    if (el instanceof HTMLMediaElement) controller.wrapMediaElement(el);
+  const capture = (el: Element) => {
+    if (el instanceof HTMLMediaElement) controller.captureMediaElement(el);
   };
 
   const scan = () => {
-    for (const el of document.querySelectorAll('video, audio')) wrap(el);
+    for (const el of document.querySelectorAll('video, audio')) capture(el);
   };
 
   if (document.documentElement) scan();
@@ -176,9 +149,9 @@ export function hookMediaElements(controller: AudioController): void {
   const observer = new MutationObserver((mutations) => {
     for (const m of mutations) {
       for (const node of m.addedNodes) {
-        if (node instanceof HTMLMediaElement) wrap(node);
+        if (node instanceof HTMLMediaElement) capture(node);
         else if (node instanceof Element) {
-          for (const el of node.querySelectorAll('video, audio')) wrap(el);
+          for (const el of node.querySelectorAll('video, audio')) capture(el);
         }
       }
     }
