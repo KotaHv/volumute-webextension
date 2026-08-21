@@ -23,8 +23,10 @@ export function setMaxMultiplier(value: number): void {
 export async function pushGain(tabId: number, gain: number): Promise<void> {
   try {
     await browser.tabs.sendMessage(tabId, { type: 'vm:volume', volume: gain });
-  } catch {
-    /* the frame is not ready yet; it pulls the volume on load */
+  } catch (error) {
+    // Expected while a frame is still loading (it pulls the volume on load),
+    // but it must stay visible so silent delivery failures are traceable.
+    console.warn('[VoluMute] volume push to tab', tabId, 'failed:', error);
   }
 }
 

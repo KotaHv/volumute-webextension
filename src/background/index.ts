@@ -21,7 +21,9 @@ const ready = Promise.all([
 
 let chain: Promise<void> = Promise.resolve();
 function enqueue(task: () => Promise<void>): void {
-  chain = chain.then(task).catch(() => {});
+  chain = chain.then(task).catch((error) => {
+    console.error('[VoluMute] background apply task failed:', error);
+  });
 }
 
 browser.storage.onChanged.addListener((changes, areaName) => {
@@ -52,9 +54,14 @@ browser.runtime.onMessage.addListener(
   async (msg: unknown, sender: browser.Runtime.MessageSender) => {
     const m = msg as { type?: string } | undefined;
     if (!m || m.type !== 'vm:volume-query') return;
-    await ready;
-    const url = sender.tab?.url ?? sender.url ?? '';
-    return { volume: await volumeForSender(sender.tab?.id, url) };
+    try {
+      await ready;
+      const url = sender.tab?.url ?? sender.url ?? '';
+      return { volume: await volumeForSender(sender.tab?.id, url) };
+    } catch (error) {
+      console.error('[VoluMute] volume query failed:', error);
+      return undefined;
+    }
   },
 );
 
@@ -68,21 +75,29 @@ browser.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   if (changeInfo.mutedInfo?.reason === 'user') {
     const hostname = hostnameOf(tab.url ?? tab.pendingUrl ?? '');
     if (hostname) {
-      void rememberUserMuteChoice(tabId, hostname, changeInfo.mutedInfo.muted).catch(() => {});
+      void rememberUserMuteChoice(tabId, hostname, changeInfo.mutedInfo.muted).catch((error) => {
+        console.warn('[VoluMute] failed to remember user mute choice:', error);
+      });
     }
   }
   if (changeInfo.url || changeInfo.status === 'loading') {
-    void ready.then(() => refreshTab(tab)).catch(() => {});
+    void ready.then(() => refreshTab(tab)).catch((error) => {
+      console.warn('[VoluMute] tab refresh failed:', error);
+    });
   }
 });
 browser.tabs.onActivated.addListener(({ tabId }) => {
   void ready
     .then(() => browser.tabs.get(tabId))
     .then(applyMuteToTab)
-    .catch(() => {});
+    .catch((error) => {
+      console.warn('[VoluMute] activation mute re-check failed:', error);
+    });
 });
 browser.tabs.onRemoved.addListener((tabId) => {
-  void clearUserMuteChoices(tabId).catch(() => {});
+  void clearUserMuteChoices(tabId).catch((error) => {
+    console.warn('[VoluMute] failed to clear user mute choices:', error);
+  });
 });
 
 async function applyAll(): Promise<void> {
@@ -91,7 +106,11 @@ async function applyAll(): Promise<void> {
   for (const tab of tabs) await refreshTab(tab, ctx);
 }
 
-void ready.then(applyAll);
+void ready.then(applyAll).catch((error) => {
+  console.error('[VoluMute] startup sweep failed:', error);
+});
 if (__BUILD_TARGET__ === 'chrome') {
-  void ready.then(reinjectContentScripts);
+  void ready.then(reinjectContentScripts).catch((error) => {
+    console.error('[VoluMute] content script re-injection failed:', error);
+  });
 }

@@ -25,8 +25,9 @@ async function init(): Promise<void> {
       | { volume?: number }
       | undefined;
     if (res && typeof res.volume === 'number') apply(res.volume);
-  } catch {
-    /* background not ready yet; the startup push will arrive */
+  } catch (error) {
+    // Background not ready yet; the startup push will arrive.
+    console.warn('[VoluMute] volume query failed:', error);
   }
 }
 

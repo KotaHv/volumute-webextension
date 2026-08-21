@@ -33,8 +33,9 @@ export async function reinjectContentScripts(): Promise<void> {
             target: { tabId: tab.id },
             files: ['src/content/index.js'],
           });
-        } catch {
-          /* restricted page */
+        } catch (error) {
+          // Restricted page (about:, view-source:, …) that cannot run scripts.
+          console.warn('[VoluMute] re-injection failed for tab', tab.id, ':', error);
         }
       }
     }

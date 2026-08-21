@@ -11,7 +11,9 @@ export async function setTabMuted(tabId: number, muted: boolean): Promise<void> 
   try {
     await browser.tabs.update(tabId, { muted });
     if (tabMuteSupported === null) setTabMuteSupported(true);
-  } catch {
+  } catch (error) {
+    // The first failure doubles as the fallback probe (Firefox Android).
+    console.warn('[VoluMute] native mute update failed for tab', tabId, ':', error);
     if (tabMuteSupported === null) setTabMuteSupported(false);
   }
 }

@@ -72,8 +72,8 @@ function setAllGains(volume: number): void {
       const ctxTime = gain.context.currentTime;
       gain.gain.cancelScheduledValues(ctxTime);
       gain.gain.setTargetAtTime(volume, ctxTime, 0.03);
-    } catch {
-      /* ignore */
+    } catch (error) {
+      console.warn('[VoluMute] gain update failed:', error);
     }
   }
   console.log(`[VoluMute] gain -> ${volume} (gains: ${controlledGains.size})`);
@@ -96,13 +96,16 @@ export class AudioController {
       this.ctx = new Ctor();
       gainNodeFor(this.ctx);
       return true;
-    } catch {
+    } catch (error) {
+      console.warn('[VoluMute] AudioContext creation failed:', error);
       return false;
     }
   }
 
   private resumeContext(): void {
     try {
+      // Rejections here are expected while autoplay is still blocked, so they
+      // stay silently ignored; the resume is retried on the next gesture.
       void this.ctx?.resume().catch(() => {});
     } catch {
       /* ignore */
@@ -180,8 +183,8 @@ export function hookMediaElements(controller: AudioController): void {
       childList: true,
       subtree: true,
     });
-  } catch {
-    /* ignore */
+  } catch (error) {
+    console.warn('[VoluMute] MutationObserver setup failed:', error);
   }
 
   window.addEventListener('load', scan);
