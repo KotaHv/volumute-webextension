@@ -1,21 +1,18 @@
 import browser from 'webextension-polyfill';
-import { hostnameOf } from '../core/url';
-import { isAutoMuted } from '../core/priority';
+import { hostnameOf, pathKeyOf } from '../core/url';
+import { computeGain } from '../core/priority';
 import { autoMutedStore } from '../storage/stores';
-import { getUserMuteChoice } from '../storage/session';
+import { loadApplyContext, maxMultiplier, pushGain, setTabMuteSupported, shouldMuteFor, tabMuteSupported } from './runtime';
+import type { ApplyContext } from './runtime';
 
 const TOUCH_THROTTLE_MS = 10_000;
-
-// Capability probe: Firefox Android throws on tabs.update({muted}),
-// so the first natural attempt doubles as the detection.
-export let tabMuteSupported: boolean | null = null;
 
 export async function setTabMuted(tabId: number, muted: boolean): Promise<void> {
   try {
     await browser.tabs.update(tabId, { muted });
-    if (tabMuteSupported === null) tabMuteSupported = true;
+    if (tabMuteSupported === null) setTabMuteSupported(true);
   } catch {
-    if (tabMuteSupported === null) tabMuteSupported = false;
+    if (tabMuteSupported === null) setTabMuteSupported(false);
   }
 }
 
@@ -26,40 +23,73 @@ function touchMuteEntry(hostname: string): void {
   autoMutedStore.touchEntry(hostname);
 }
 
-// Effective mute decision for a tab: a remembered user choice wins, otherwise
-// the site's auto-mute setting applies. Shared by the mute path (native tab
-// muting) and the volume path (fallback gain 0).
-export async function effectiveShouldMute(
-  tabId: number | undefined,
+// Fallback platforms have no native muting, so the silence is the gain itself:
+// 0 when muted, the stored multiplier when restored.
+async function pushFallbackGain(
+  tab: browser.Tabs.Tab,
+  shouldMute: boolean,
+  ctx: ApplyContext,
+  hostname: string,
   url: string,
-): Promise<boolean> {
-  if (tabId === undefined) return false;
-  const hostname = hostnameOf(url);
-  if (!hostname) return false;
-  const userChoice = await getUserMuteChoice(tabId, hostname);
-  return userChoice ?? isAutoMuted(autoMutedStore.snapshot(), hostname);
+): Promise<void> {
+  if (tab.id === undefined) return;
+  const gain = computeGain(
+    shouldMute,
+    false,
+    ctx.pageVolumes,
+    ctx.siteVolumes,
+    pathKeyOf(url) ?? '',
+    hostname,
+    maxMultiplier,
+  );
+  await pushGain(tab.id, gain);
 }
 
-// Native tab muting layer. When tabs.update({ muted }) is unsupported, silence
-// is delivered through the volume channel instead (see volume.ts), so no
-// content-script mute message is needed here anymore.
-export async function applyMuteToTab(tab: browser.Tabs.Tab): Promise<void> {
-  if (tab.id === undefined) return;
-  const hostname = hostnameOf(tab.url ?? tab.pendingUrl ?? '');
-  if (!hostname) return;
-  const isMuted = tab.mutedInfo?.muted ?? false;
-  const shouldMute = await effectiveShouldMute(tab.id, tab.url ?? tab.pendingUrl ?? '');
-  const pluginMuted = tab.mutedInfo?.reason === 'extension';
-
-  if (isMuted === shouldMute) return;
+// Never lift a silence that is not ours. When the first native attempt reveals
+// fallback mode, the probe failure itself still needs the gain delivered.
+// Returns whether a mute happened, so callers touch the entry per hostname.
+async function syncTabMute(
+  tab: browser.Tabs.Tab,
+  shouldMute: boolean,
+  ctx: ApplyContext,
+  hostname: string,
+  url: string,
+): Promise<boolean> {
+  if (tab.id === undefined) return false;
   if (tabMuteSupported === null || tabMuteSupported === true) {
-    // Only act in the direction the extension rules demand: mute when they
-    // require it, and unmute only when the silence is ours. Browser/user
-    // muting (e.g. reason 'user', 'capture', or a user choice lost with a
-    // cleared session) must not be flipped by the extension.
+    const isMuted = tab.mutedInfo?.muted ?? false;
+    if (isMuted === shouldMute) return false;
+    const pluginMuted = tab.mutedInfo?.reason === 'extension';
     if (shouldMute || pluginMuted) await setTabMuted(tab.id, shouldMute);
   }
-  // tabMuteSupported === false: nothing to mutate natively; the volume layer
-  // pushes gain 0 for muted tabs.
-  if (shouldMute) touchMuteEntry(hostname);
+  if (tabMuteSupported === false) await pushFallbackGain(tab, shouldMute, ctx, hostname, url);
+  return shouldMute;
+}
+
+export async function applyMute(tab: browser.Tabs.Tab, ctx: ApplyContext): Promise<void> {
+  const url = tab.url ?? tab.pendingUrl ?? '';
+  const hostname = hostnameOf(url);
+  if (tab.id === undefined || hostname === null) return;
+  if (await syncTabMute(tab, shouldMuteFor(ctx, tab.id, hostname), ctx, hostname, url)) {
+    touchMuteEntry(hostname);
+  }
+}
+
+export async function applyMuteToTab(tab: browser.Tabs.Tab): Promise<void> {
+  await applyMute(tab, await loadApplyContext());
+}
+
+export async function applyMuteToTabs(changes: Map<string, boolean>): Promise<void> {
+  const tabs = await browser.tabs.query({});
+  const ctx = await loadApplyContext();
+  const touched = new Set<string>();
+  for (const tab of tabs) {
+    if (tab.id === undefined) continue;
+    const url = tab.url ?? tab.pendingUrl ?? '';
+    const hostname = hostnameOf(url);
+    if (!hostname || !changes.has(hostname)) continue;
+    const shouldMute = ctx.choices[tab.id]?.[hostname] ?? changes.get(hostname) ?? false;
+    if (await syncTabMute(tab, shouldMute, ctx, hostname, url)) touched.add(hostname);
+  }
+  for (const hostname of touched) touchMuteEntry(hostname);
 }

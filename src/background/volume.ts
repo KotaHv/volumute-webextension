@@ -1,90 +1,98 @@
 import browser from 'webextension-polyfill';
 import { hostnameOf, pathKeyOf } from '../core/url';
-import { computeMultiplier } from '../core/priority';
-import { DEFAULT_MAX_MULTIPLIER } from '../core/constants';
-import type { PageVolumeMap, SiteVolumeMap } from '../core/types';
+import { computeGain, computeMultiplier } from '../core/priority';
+import type { KVStore } from '../storage/kvstore';
+import type { VolumeEntry } from '../core/types';
 import { pageVolumesStore, siteVolumesStore } from '../storage/stores';
-import { applyMuteToTab, effectiveShouldMute, tabMuteSupported } from './mute';
+import { loadApplyContext, maxMultiplier, pushGain, shouldMuteFor, tabMuteSupported } from './runtime';
+import type { ApplyContext } from './runtime';
 
-let maxMultiplier = DEFAULT_MAX_MULTIPLIER;
-
-export function setMaxMultiplier(value: number): void {
-  maxMultiplier = value;
-}
-
-// Effective gain for a tab. While native tab muting is available (including
-// the unknown probe state) the gain is ALWAYS the stored multiplier and muting
-// is left to the browser layer (tabs.update({ muted })). Only in fallback mode
-// (native muting unsupported) does a muted tab get gain 0.
-export function computeGain(
-  shouldMute: boolean,
-  nativeMuteSupported: boolean | null,
-  pageVolumes: PageVolumeMap,
-  siteVolumes: SiteVolumeMap,
-  path: string,
-  hostname: string,
-  max: number = DEFAULT_MAX_MULTIPLIER,
-): number {
-  if (shouldMute && nativeMuteSupported === false) return 0;
-  return computeMultiplier(pageVolumes, siteVolumes, path, hostname, max);
-}
-
-// Push the authoritative per-tab volume to every frame of the tab (the
-// manifest's all_frames content scripts extend to cross-origin iframes).
-// `touch` is true only for URL-driven syncs (load / navigation): storage-driven
-// re-applications must NOT touch our own writes (write loop).
-export async function applyTabVolume(tab: browser.Tabs.Tab, touch: boolean): Promise<void> {
+async function syncTabVolume(
+  tab: browser.Tabs.Tab,
+  ctx: ApplyContext,
+  touch: boolean,
+  hostname: string | null,
+  path: string | null,
+  multiplier: number,
+): Promise<void> {
   if (tab.id === undefined) return;
+  const shouldMute = shouldMuteFor(ctx, tab.id, hostname);
+  if (shouldMute && tabMuteSupported === false) return;
+  if (touch && !shouldMute) {
+    if (path && ctx.pageVolumes[path]) {
+      await pageVolumesStore.touchEntry(path);
+    } else if (hostname && ctx.siteVolumes[hostname]) {
+      await siteVolumesStore.touchEntry(hostname);
+    }
+  }
+  await pushGain(tab.id, multiplier);
+}
+
+export async function pushVolume(
+  tab: browser.Tabs.Tab,
+  ctx: ApplyContext,
+  touch: boolean,
+): Promise<void> {
   const url = tab.url ?? tab.pendingUrl ?? '';
   const hostname = hostnameOf(url);
   const path = pathKeyOf(url);
-  const shouldMute = await effectiveShouldMute(tab.id, url);
-  const pageVolumes = pageVolumesStore.snapshot();
-  const siteVolumes = siteVolumesStore.snapshot();
-  const gain = computeGain(
-    shouldMute,
-    tabMuteSupported,
-    pageVolumes,
-    siteVolumes,
+  const gain = computeMultiplier(
+    ctx.pageVolumes,
+    ctx.siteVolumes,
     path ?? '',
     hostname ?? '',
     maxMultiplier,
   );
-  if (touch && !shouldMute) {
-    if (path && pageVolumes[path]) {
-      void pageVolumesStore.touchEntry(path);
-    } else if (hostname && siteVolumes[hostname]) {
-      void siteVolumesStore.touchEntry(hostname);
-    }
-  }
-  try {
-    await browser.tabs.sendMessage(tab.id, { type: 'vm:volume', volume: gain });
-  } catch {
-    /* no live content script yet; it pulls on load instead */
-  }
+  await syncTabVolume(tab, ctx, touch, hostname, path, gain);
 }
 
-export async function recomputeAll(touch: boolean): Promise<void> {
+export async function applyVolumeToTabs(changes: Map<string, number>): Promise<void> {
   const tabs = await browser.tabs.query({});
+  const ctx = await loadApplyContext();
   for (const tab of tabs) {
-    await applyMuteToTab(tab);
-    await applyTabVolume(tab, touch);
+    const url = tab.url ?? tab.pendingUrl ?? '';
+    const hostname = hostnameOf(url);
+    const path = pathKeyOf(url);
+    const pageMultiplier = path === null ? undefined : changes.get(path);
+    const siteMultiplier = hostname === null ? undefined : changes.get(hostname);
+    const multiplier = pageMultiplier ?? siteMultiplier;
+    if (multiplier === undefined) continue;
+    await syncTabVolume(tab, ctx, false, hostname, path, multiplier);
   }
 }
 
-// Volume for a frame that asks on load (or after a Chrome reload re-injection).
-export async function volumeForSender(
-  tabId: number | undefined,
-  url: string,
-): Promise<number> {
-  const shouldMute = await effectiveShouldMute(tabId, url);
+export async function applyMaxClamp(oldMax: number, newMax: number): Promise<void> {
+  if (newMax >= oldMax) return;
+  await clampEntries(siteVolumesStore, newMax);
+  await clampEntries(pageVolumesStore, newMax);
+}
+
+async function clampEntries(store: KVStore<VolumeEntry>, newMax: number): Promise<void> {
+  const over = new Set<string>();
+  for (const [key, entry] of Object.entries(store.snapshot())) {
+    if (entry.multiplier > newMax) over.add(key);
+  }
+  if (!over.size) return;
+  await store.update((map) => {
+    const next: typeof map = { ...map };
+    for (const key of over) {
+      const entry = next[key];
+      if (entry) next[key] = { ...entry, multiplier: newMax };
+    }
+    return next;
+  });
+}
+
+export async function volumeForSender(tabId: number | undefined, url: string): Promise<number> {
+  const hostname = hostnameOf(url);
+  const ctx = await loadApplyContext();
   return computeGain(
-    shouldMute,
+    shouldMuteFor(ctx, tabId, hostname),
     tabMuteSupported,
-    pageVolumesStore.snapshot(),
-    siteVolumesStore.snapshot(),
+    ctx.pageVolumes,
+    ctx.siteVolumes,
     pathKeyOf(url) ?? '',
-    hostnameOf(url) ?? '',
+    hostname ?? '',
     maxMultiplier,
   );
 }

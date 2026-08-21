@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { computeMultiplier, isAutoMuted } from './priority';
+import { computeGain, computeMultiplier, isAutoMuted } from './priority';
+import { DEFAULT_MULTIPLIER } from './types';
+import type { PageVolumeMap, SiteVolumeMap, VolumeEntry } from './types';
+
+function vol(multiplier: number): VolumeEntry {
+  return { multiplier, created: 0, lastUsed: 0 };
+}
 
 describe('computeMultiplier', () => {
   it('returns default 1x when nothing is configured', () => {
@@ -80,5 +86,66 @@ describe('isAutoMuted', () => {
 
   it('false when the host is not configured', () => {
     expect(isAutoMuted({}, 'example.com')).toBe(false);
+  });
+});
+
+describe('computeGain', () => {
+  const emptyPage: PageVolumeMap = {};
+  const emptySite: SiteVolumeMap = {};
+
+  it('returns the stored site multiplier when not muted', () => {
+    expect(
+      computeGain(false, true, emptyPage, { 'example.com': vol(0.5) }, '', 'example.com', 5),
+    ).toBe(0.5);
+  });
+
+  it('keeps the multiplier when muted while native tab muting is available', () => {
+    expect(
+      computeGain(true, true, emptyPage, { 'example.com': vol(0.5) }, '', 'example.com', 5),
+    ).toBe(0.5);
+  });
+
+  it('treats the unknown probe state like native availability (no gain 0 on mute)', () => {
+    expect(
+      computeGain(true, null, emptyPage, { 'example.com': vol(0.5) }, '', 'example.com', 5),
+    ).toBe(0.5);
+  });
+
+  it('returns 0 for a muted tab in fallback mode', () => {
+    expect(
+      computeGain(true, false, emptyPage, { 'example.com': vol(0.5) }, '', 'example.com', 5),
+    ).toBe(0);
+  });
+
+  it('keeps the multiplier for an unmuted tab in fallback mode', () => {
+    expect(
+      computeGain(false, false, emptyPage, { 'example.com': vol(0.5) }, '', 'example.com', 5),
+    ).toBe(0.5);
+  });
+
+  it('defaults to unit volume without any entry', () => {
+    expect(computeGain(false, true, emptyPage, emptySite, '', 'example.com', 5)).toBe(
+      DEFAULT_MULTIPLIER,
+    );
+  });
+
+  it('clamps to the configured maximum multiplier', () => {
+    expect(
+      computeGain(false, true, emptyPage, { 'example.com': vol(9) }, '', 'example.com', 5),
+    ).toBe(5);
+  });
+
+  it('lets page volume take precedence over site volume', () => {
+    expect(
+      computeGain(
+        false,
+        true,
+        { 'https://example.com/live': vol(0.3) },
+        { 'example.com': vol(0.5) },
+        'https://example.com/live',
+        'example.com',
+        5,
+      ),
+    ).toBe(0.3);
   });
 });

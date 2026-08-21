@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { clearUserMuteChoices, getUserMuteChoice, rememberUserMuteChoice } from './session';
+import { clearUserMuteChoices, getAllUserMuteChoices, rememberUserMuteChoice } from './session';
 
 type SessionData = Record<string, unknown>;
 type SessionWrite = (items: Record<string, unknown>, data: SessionData) => Promise<void>;
@@ -43,19 +43,21 @@ describe('session user mute choices', () => {
     vi.unstubAllGlobals();
   });
 
-  it('stores separate choices for each hostname in a tab', async () => {
+  it('stores choices per tab and hostname in one blob', async () => {
     const { browser } = makeBrowser();
     vi.stubGlobal('browser', browser);
 
     await rememberUserMuteChoice(1, 'a.example', false);
     await rememberUserMuteChoice(1, 'b.example', true);
+    await rememberUserMuteChoice(2, 'c.example', true);
 
-    await expect(getUserMuteChoice(1, 'a.example')).resolves.toBe(false);
-    await expect(getUserMuteChoice(1, 'b.example')).resolves.toBe(true);
-    await expect(getUserMuteChoice(1, 'c.example')).resolves.toBeUndefined();
+    await expect(getAllUserMuteChoices()).resolves.toEqual({
+      '1': { 'a.example': false, 'b.example': true },
+      '2': { 'c.example': true },
+    });
   });
 
-  it('serializes concurrent writes and preserves both hostnames', async () => {
+  it('serializes concurrent writes into one blob', async () => {
     const firstSetStarted = deferred();
     const releaseFirstSet = deferred();
     let firstSet = true;
@@ -71,14 +73,14 @@ describe('session user mute choices', () => {
 
     const firstWrite = rememberUserMuteChoice(2, 'a.example', false);
     await firstSetStarted.promise;
-    const secondWrite = rememberUserMuteChoice(2, 'b.example', true);
+    const secondWrite = rememberUserMuteChoice(5, 'b.example', true);
 
     releaseFirstSet.resolve();
     await Promise.all([firstWrite, secondWrite]);
 
-    expect(data['userMuteChoice:2']).toEqual({
-      'a.example': false,
-      'b.example': true,
+    expect(data['userMuteChoice']).toEqual({
+      '2': { 'a.example': false },
+      '5': { 'b.example': true },
     });
   });
 
@@ -94,7 +96,7 @@ describe('session user mute choices', () => {
 
     const write = rememberUserMuteChoice(3, 'a.example', false);
     await setStarted.promise;
-    const read = getUserMuteChoice(3, 'a.example');
+    const read = getAllUserMuteChoices();
     let readCompleted = false;
     void read.then(() => {
       readCompleted = true;
@@ -105,7 +107,7 @@ describe('session user mute choices', () => {
 
     releaseSet.resolve();
     await write;
-    await expect(read).resolves.toBe(false);
+    await expect(read).resolves.toEqual({ '3': { 'a.example': false } });
   });
 
   it('serializes cleanup after pending writes', async () => {
@@ -125,6 +127,6 @@ describe('session user mute choices', () => {
     releaseSet.resolve();
     await Promise.all([write, clear]);
 
-    expect(data['userMuteChoice:4']).toBeUndefined();
+    expect(data['userMuteChoice']).toEqual({});
   });
 });

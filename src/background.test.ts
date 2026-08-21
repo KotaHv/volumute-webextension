@@ -17,23 +17,22 @@ const mocks = vi.hoisted(() => {
       onMessage: { addListener: vi.fn() },
     },
     storage: {
-      sync: {
-        onChanged: { addListener: vi.fn() },
-      },
+      onChanged: { addListener: vi.fn() },
+      session: { get: vi.fn() },
     },
   };
   const storeFactory = () => ({
     init: vi.fn(),
     snapshot: vi.fn(),
     touchEntry: vi.fn(),
-    onChange: vi.fn((_cb: () => void) => () => {}),
+    update: vi.fn(async (_fn: unknown) => {}),
+    onChange: vi.fn(() => () => {}),
   });
   const autoMutedStore = storeFactory();
   const siteVolumesStore = storeFactory();
   const pageVolumesStore = storeFactory();
   const getSettings = vi.fn();
-  const subscribeSettings = vi.fn((_cb: (s: Settings) => void) => () => {});
-  const getUserMuteChoice = vi.fn();
+  const getAllUserMuteChoices = vi.fn();
   const rememberUserMuteChoice = vi.fn(async () => {});
   const clearUserMuteChoices = vi.fn(async () => {});
   return {
@@ -42,8 +41,7 @@ const mocks = vi.hoisted(() => {
     siteVolumesStore,
     pageVolumesStore,
     getSettings,
-    subscribeSettings,
-    getUserMuteChoice,
+    getAllUserMuteChoices,
     rememberUserMuteChoice,
     clearUserMuteChoices,
   };
@@ -57,12 +55,12 @@ vi.mock('./storage/stores', () => ({
 }));
 vi.mock('./storage/session', () => ({
   clearUserMuteChoices: mocks.clearUserMuteChoices,
-  getUserMuteChoice: mocks.getUserMuteChoice,
+  getAllUserMuteChoices: mocks.getAllUserMuteChoices,
   rememberUserMuteChoice: mocks.rememberUserMuteChoice,
 }));
 vi.mock('./storage/settings', () => ({
   getSettings: mocks.getSettings,
-  subscribeSettings: mocks.subscribeSettings,
+  subscribeSettings: vi.fn(() => () => {}),
   updateSettings: vi.fn(),
 }));
 
@@ -111,6 +109,17 @@ function getOnUpdated(): (
   ) => void;
 }
 
+function fireStorage(
+  changes: Record<string, { oldValue?: unknown; newValue?: unknown }>,
+  areaName: 'sync' | 'local',
+): void {
+  const cb = mocks.browser.storage.onChanged.addListener.mock.calls[0]?.[0] as (
+    changes: Record<string, unknown>,
+    area: string,
+  ) => void;
+  cb(changes, areaName);
+}
+
 describe('background entry', () => {
   let applyMuteToTab: typeof import('./background/mute').applyMuteToTab;
   const defaultSettings: Settings = { lang: 'auto', theme: 'auto', maxMultiplier: 5 };
@@ -126,7 +135,8 @@ describe('background entry', () => {
     mocks.pageVolumesStore.init.mockResolvedValue(undefined);
     mocks.pageVolumesStore.snapshot.mockReturnValue({});
     mocks.getSettings.mockResolvedValue(defaultSettings);
-    mocks.getUserMuteChoice.mockResolvedValue(undefined);
+    mocks.getAllUserMuteChoices.mockResolvedValue({});
+    mocks.browser.storage.session.get.mockResolvedValue({});
     mocks.browser.tabs.update.mockResolvedValue(undefined);
     mocks.browser.tabs.sendMessage.mockResolvedValue(undefined);
     mocks.browser.tabs.query.mockResolvedValue([]);
@@ -144,7 +154,6 @@ describe('background entry', () => {
         }),
       );
       mocks.browser.tabs.update.mockClear();
-      mocks.browser.tabs.sendMessage.mockClear();
       mocks.autoMutedStore.touchEntry.mockClear();
     }
 
@@ -184,7 +193,7 @@ describe('background entry', () => {
       mocks.autoMutedStore.snapshot.mockReturnValue({
         'example.com': { enabled: true },
       });
-      mocks.getUserMuteChoice.mockResolvedValue(false);
+      mocks.getAllUserMuteChoices.mockResolvedValue({ '2': { 'example.com': false } });
 
       await applyMuteToTab(
         makeTab({
@@ -217,7 +226,7 @@ describe('background entry', () => {
 
     it('uses native tab unmuting for a remembered user choice', async () => {
       await establishNativeMuteSupport();
-      mocks.getUserMuteChoice.mockResolvedValue(false);
+      mocks.getAllUserMuteChoices.mockResolvedValue({ '2': { 'example.com': false } });
       mocks.autoMutedStore.snapshot.mockReturnValue({
         'example.com': { enabled: true },
       });
@@ -236,7 +245,7 @@ describe('background entry', () => {
 
     it('honors a remembered mute choice even when auto mute is disabled', async () => {
       mocks.autoMutedStore.snapshot.mockReturnValue({});
-      mocks.getUserMuteChoice.mockResolvedValue(true);
+      mocks.getAllUserMuteChoices.mockResolvedValue({ '2': { 'example.com': true } });
 
       await applyMuteToTab(
         makeTab({
@@ -277,7 +286,7 @@ describe('background entry', () => {
       expect(mocks.browser.tabs.sendMessage).not.toHaveBeenCalled();
     });
 
-    it('stops pushing mute messages when native tab muting is unsupported', async () => {
+    it('delivers fallback mute through a gain 0 push when the probe fails', async () => {
       mocks.browser.tabs.update.mockRejectedValue(new Error('unsupported'));
       mocks.autoMutedStore.snapshot.mockReturnValue({
         'example.com': { enabled: true },
@@ -290,22 +299,16 @@ describe('background entry', () => {
           mutedInfo: { muted: false },
         }),
       );
-      mocks.autoMutedStore.snapshot.mockReturnValue({});
-      mocks.browser.tabs.sendMessage.mockClear();
-      await applyMuteToTab(
-        makeTab({
-          id: 3,
-          url: 'https://example.com/page',
-          mutedInfo: { muted: false },
-        }),
-      );
 
-      expect(mocks.browser.tabs.sendMessage).not.toHaveBeenCalled();
+      expect(mocks.browser.tabs.sendMessage).toHaveBeenCalledWith(3, {
+        type: 'vm:volume',
+        volume: 0,
+      });
     });
 
     it('does not touch when unmuting via a user choice in fallback mode', async () => {
       mocks.browser.tabs.update.mockRejectedValue(new Error('unsupported'));
-      mocks.getUserMuteChoice.mockResolvedValue(false);
+      mocks.getAllUserMuteChoices.mockResolvedValue({ '5': { 'example.com': false } });
       mocks.autoMutedStore.snapshot.mockReturnValue({
         'example.com': { enabled: true },
       });
@@ -408,7 +411,6 @@ describe('background entry', () => {
 
     it('answers with gain 0 for a muted tab in fallback mode', async () => {
       mocks.browser.tabs.update.mockRejectedValue(new Error('unsupported'));
-      // Trigger the fallback probe with a tab the extension must mute.
       mocks.autoMutedStore.snapshot.mockReturnValue({
         'probe.test': { enabled: true },
       });
@@ -444,13 +446,14 @@ describe('background entry', () => {
     });
 
     it('clamps the answer to the configured maximum multiplier', async () => {
-      const onSettings = mocks.subscribeSettings.mock.calls[0]?.[0] as unknown as (
-        s: Settings,
-      ) => void;
-      onSettings({ ...defaultSettings, maxMultiplier: 3 });
       mocks.siteVolumesStore.snapshot.mockReturnValue({
         'example.com': vol(9),
       });
+      fireStorage(
+        { settings: { oldValue: { maxMultiplier: 5 }, newValue: { maxMultiplier: 3 } } },
+        'sync',
+      );
+      await flush();
       const handler = getMessageHandler();
 
       await expect(
@@ -467,179 +470,212 @@ describe('background entry', () => {
     });
   });
 
-  describe('volume redistribution', () => {
+  describe('storage.onChanged dispatch', () => {
     it('sweeps all tabs on startup', async () => {
       expect(mocks.browser.tabs.query).toHaveBeenCalledWith({});
     });
 
-    it('pushes the default volume on a tab URL change without touching site entries', async () => {
-      mocks.browser.tabs.sendMessage.mockClear();
-      const onUpdated = getOnUpdated();
-
-      onUpdated(1, { url: 'https://example.com/new' }, makeTab({ id: 1, url: 'https://example.com/new' }));
-
-      await flush();
-
-      expect(mocks.siteVolumesStore.touchEntry).not.toHaveBeenCalled();
-      expect(mocks.pageVolumesStore.touchEntry).not.toHaveBeenCalled();
-      expect(mocks.browser.tabs.sendMessage).toHaveBeenCalledWith(1, {
-        type: 'vm:volume',
-        volume: 1,
-      });
-    });
-
-    it('touches the page entry on a URL change when a page volume exists', async () => {
-      mocks.pageVolumesStore.snapshot.mockReturnValue({
-        'https://example.com/new': vol(0.4),
-      });
-      const onUpdated = getOnUpdated();
-
-      onUpdated(1, { url: 'https://example.com/new' }, makeTab({ id: 1, url: 'https://example.com/new' }));
-
-      await flush();
-
-      expect(mocks.pageVolumesStore.touchEntry).toHaveBeenCalledWith('https://example.com/new');
-      expect(mocks.browser.tabs.sendMessage).toHaveBeenCalledWith(1, {
-        type: 'vm:volume',
-        volume: 0.4,
-      });
-    });
-
-    it('touches the site entry on a URL change when only a site volume exists', async () => {
-      mocks.siteVolumesStore.snapshot.mockReturnValue({
-        'example.com': vol(0.6),
-      });
-      const onUpdated = getOnUpdated();
-
-      onUpdated(1, { url: 'https://example.com/new' }, makeTab({ id: 1, url: 'https://example.com/new' }));
-
-      await flush();
-
-      expect(mocks.siteVolumesStore.touchEntry).toHaveBeenCalledWith('example.com');
-    });
-
-    it('recomputes all tabs without touching when a volume entry changes', async () => {
-      const onSiteVolumes = mocks.siteVolumesStore.onChange.mock.calls[0]?.[0] as unknown as () => void;
+    it('recomputes only tabs matching a changed site volume', async () => {
       mocks.siteVolumesStore.snapshot.mockReturnValue({
         'example.com': vol(0.7),
       });
       mocks.browser.tabs.query.mockResolvedValue([
         makeTab({ id: 1, url: 'https://example.com/a', mutedInfo: { muted: false } }),
+        makeTab({ id: 2, url: 'https://other.test/b', mutedInfo: { muted: false } }),
       ]);
 
-      onSiteVolumes();
+      fireStorage(
+        {
+          siteVolumes: {
+            oldValue: {},
+            newValue: { 'example.com': vol(0.7) },
+          },
+        },
+        'local',
+      );
       await flush();
 
       expect(mocks.browser.tabs.sendMessage).toHaveBeenCalledWith(1, {
         type: 'vm:volume',
         volume: 0.7,
       });
+      expect(mocks.browser.tabs.sendMessage).not.toHaveBeenCalledWith(2, expect.anything());
       expect(mocks.siteVolumesStore.touchEntry).not.toHaveBeenCalled();
     });
 
-    it('recomputes on auto-mute changes', async () => {
-      const onAutoMuted = mocks.autoMutedStore.onChange.mock.calls[0]?.[0] as unknown as () => void;
-      mocks.browser.tabs.query.mockResolvedValue([
-        makeTab({ id: 1, url: 'https://example.com/a', mutedInfo: { muted: false } }),
-      ]);
-
-      onAutoMuted();
-      await flush();
-
-      expect(mocks.browser.tabs.query).toHaveBeenCalled();
-      expect(mocks.browser.tabs.sendMessage).toHaveBeenCalledWith(1, {
-        type: 'vm:volume',
-        volume: 1,
-      });
-    });
-
-    it('recomputes with the new maximum multiplier on settings changes', async () => {
-      const onSettings = mocks.subscribeSettings.mock.calls[0]?.[0] as unknown as (s: Settings) => void;
-      mocks.siteVolumesStore.snapshot.mockReturnValue({
-        'example.com': vol(9),
-      });
-      mocks.browser.tabs.query.mockResolvedValue([
-        makeTab({ id: 1, url: 'https://example.com/a', mutedInfo: { muted: false } }),
-      ]);
-
-      onSettings({ ...defaultSettings, maxMultiplier: 3 });
-      await flush();
-
-      expect(mocks.browser.tabs.sendMessage).toHaveBeenCalledWith(1, {
-        type: 'vm:volume',
-        volume: 3,
-      });
-    });
-
-    it('merges store changes fired together into a single sweep', async () => {
-      mocks.siteVolumesStore.snapshot.mockReturnValue({
-        'example.com': vol(0.4),
-      });
+    it('recomputes only tabs matching a changed page volume', async () => {
       mocks.pageVolumesStore.snapshot.mockReturnValue({
-        'https://example.com/a': vol(0.6),
+        'https://example.com/a': vol(0.4),
       });
       mocks.browser.tabs.query.mockResolvedValue([
         makeTab({ id: 1, url: 'https://example.com/a', mutedInfo: { muted: false } }),
+        makeTab({ id: 2, url: 'https://example.com/b', mutedInfo: { muted: false } }),
       ]);
-      mocks.browser.tabs.query.mockClear();
-      mocks.browser.tabs.sendMessage.mockClear();
 
-      const onSiteVolumes = mocks.siteVolumesStore.onChange.mock.calls[0]?.[0] as unknown as () => void;
-      const onPageVolumes = mocks.pageVolumesStore.onChange.mock.calls[0]?.[0] as unknown as () => void;
-      onSiteVolumes();
-      onPageVolumes();
+      fireStorage(
+        {
+          pageVolumes: {
+            oldValue: {},
+            newValue: { 'https://example.com/a': vol(0.4) },
+          },
+        },
+        'local',
+      );
       await flush();
 
-      expect(mocks.browser.tabs.query).toHaveBeenCalledTimes(1);
-      expect(mocks.browser.tabs.sendMessage).toHaveBeenCalledTimes(1);
       expect(mocks.browser.tabs.sendMessage).toHaveBeenCalledWith(1, {
         type: 'vm:volume',
-        volume: 0.6,
+        volume: 0.4,
       });
+      expect(mocks.browser.tabs.sendMessage).not.toHaveBeenCalledWith(2, expect.anything());
     });
 
-    it('serializes sweeps and reruns once with the newest state when a change arrives mid-sweep', async () => {
-      const tabs = [makeTab({ id: 1, url: 'https://example.com/a', mutedInfo: { muted: false } })];
-      let releaseFirstQuery!: (value?: unknown) => void;
-      mocks.browser.tabs.query
-        .mockImplementationOnce(
-          () => new Promise((resolve) => (releaseFirstQuery = resolve)),
-        )
-        .mockResolvedValue(tabs);
-      mocks.browser.tabs.query.mockClear();
-      mocks.browser.tabs.sendMessage.mockClear();
+    it('applies mute only to an affected tab on auto-mute changes', async () => {
+      mocks.browser.tabs.query.mockResolvedValue([
+        makeTab({ id: 1, url: 'https://example.com/a', mutedInfo: { muted: false } }),
+        makeTab({ id: 2, url: 'https://other.test/b', mutedInfo: { muted: false } }),
+      ]);
 
-      const onAutoMuted = mocks.autoMutedStore.onChange.mock.calls[0]?.[0] as unknown as () => void;
-      onAutoMuted();
+      fireStorage(
+        {
+          autoMuted: {
+            oldValue: {},
+            newValue: { 'example.com': { enabled: true, created: 1, lastUsed: 1, deviceId: 'd' } },
+          },
+        },
+        'sync',
+      );
       await flush();
-      // The sweep is parked inside tabs.query; a change arriving here must not
-      // start a concurrent sweep.
-      expect(mocks.browser.tabs.query).toHaveBeenCalledTimes(1);
+
+      expect(mocks.browser.tabs.update).toHaveBeenCalledWith(1, { muted: true });
+      expect(mocks.browser.tabs.update).not.toHaveBeenCalledWith(2, expect.anything());
+    });
+
+    it('mutes from the diff value without re-reading the mute store', async () => {
+      mocks.browser.tabs.query.mockResolvedValue([
+        makeTab({ id: 1, url: 'https://example.com/a', mutedInfo: { muted: false } }),
+      ]);
+
+      fireStorage(
+        {
+          autoMuted: {
+            oldValue: {},
+            newValue: { 'example.com': { enabled: true, created: 1, lastUsed: 1, deviceId: 'd' } },
+          },
+        },
+        'sync',
+      );
+      await flush();
+
+      expect(mocks.browser.tabs.update).toHaveBeenCalledWith(1, { muted: true });
+    });
+
+    it('reads session once and touches a hostname once for many tabs on it', async () => {
+      mocks.browser.tabs.query.mockResolvedValue([
+        makeTab({ id: 1, url: 'https://example.com/a', mutedInfo: { muted: false } }),
+        makeTab({ id: 2, url: 'https://example.com/b', mutedInfo: { muted: false } }),
+        makeTab({ id: 3, url: 'https://other.test/c', mutedInfo: { muted: false } }),
+      ]);
+      mocks.getAllUserMuteChoices.mockClear();
+
+      fireStorage(
+        {
+          autoMuted: {
+            oldValue: {},
+            newValue: { 'example.com': { enabled: true, created: 1, lastUsed: 1, deviceId: 'd' } },
+          },
+        },
+        'sync',
+      );
+      await flush();
+
+      expect(mocks.getAllUserMuteChoices).toHaveBeenCalledTimes(1);
+      expect(mocks.browser.tabs.update).toHaveBeenCalledTimes(2);
+      expect(mocks.autoMutedStore.touchEntry).toHaveBeenCalledTimes(1);
+      expect(mocks.autoMutedStore.touchEntry).toHaveBeenCalledWith('example.com');
+    });
+
+    it('pushes gain 0 in fallback mode when a site is auto-muted', async () => {
+      mocks.browser.tabs.update.mockRejectedValue(new Error('unsupported'));
+      mocks.autoMutedStore.snapshot.mockReturnValue({
+        'probe.test': { enabled: true },
+      });
+      await applyMuteToTab(
+        makeTab({ id: 99, url: 'https://probe.test/x', mutedInfo: { muted: false } }),
+      );
       mocks.autoMutedStore.snapshot.mockReturnValue({
         'example.com': { enabled: true },
       });
-      onAutoMuted();
-      expect(mocks.browser.tabs.query).toHaveBeenCalledTimes(1);
+      mocks.siteVolumesStore.snapshot.mockReturnValue({
+        'example.com': vol(0.5),
+      });
+      mocks.browser.tabs.query.mockResolvedValue([
+        makeTab({ id: 1, url: 'https://example.com/a', mutedInfo: { muted: false } }),
+        makeTab({ id: 2, url: 'https://example.com/b', mutedInfo: { muted: false } }),
+      ]);
+      mocks.getAllUserMuteChoices.mockClear();
+      mocks.browser.tabs.sendMessage.mockClear();
 
-      releaseFirstQuery(tabs);
+      fireStorage(
+        {
+          autoMuted: {
+            oldValue: {},
+            newValue: { 'example.com': { enabled: true, created: 1, lastUsed: 1, deviceId: 'd' } },
+          },
+        },
+        'sync',
+      );
       await flush();
 
-      expect(mocks.browser.tabs.query).toHaveBeenCalledTimes(2);
-      expect(mocks.browser.tabs.sendMessage).toHaveBeenCalledTimes(2);
-      expect(mocks.browser.tabs.sendMessage).toHaveBeenLastCalledWith(1, {
+      expect(mocks.getAllUserMuteChoices).toHaveBeenCalledTimes(1);
+      expect(mocks.browser.tabs.sendMessage).toHaveBeenNthCalledWith(1, 1, {
+        type: 'vm:volume',
+        volume: 0,
+      });
+      expect(mocks.browser.tabs.sendMessage).toHaveBeenNthCalledWith(2, 2, {
+        type: 'vm:volume',
+        volume: 0,
+      });
+    });
+
+    it('restores the gain after a fallback mute when the site auto-mute is disabled', async () => {
+      mocks.browser.tabs.update.mockRejectedValue(new Error('unsupported'));
+      mocks.autoMutedStore.snapshot.mockReturnValue({
+        'probe.test': { enabled: true },
+      });
+      await applyMuteToTab(
+        makeTab({ id: 99, url: 'https://probe.test/x', mutedInfo: { muted: false } }),
+      );
+      mocks.autoMutedStore.snapshot.mockReturnValue({});
+      mocks.browser.tabs.query.mockResolvedValue([
+        makeTab({ id: 1, url: 'https://example.com/a', mutedInfo: { muted: false } }),
+      ]);
+      mocks.getAllUserMuteChoices.mockClear();
+
+      fireStorage(
+        {
+          autoMuted: {
+            oldValue: { 'example.com': { enabled: true, created: 1, lastUsed: 1, deviceId: 'd' } },
+            newValue: {},
+          },
+        },
+        'sync',
+      );
+      await flush();
+
+      expect(mocks.browser.tabs.sendMessage).toHaveBeenCalledWith(1, {
         type: 'vm:volume',
         volume: 1,
       });
     });
 
-    it('pushes gain 0 in fallback mode when a site becomes auto-muted', async () => {
+    it('skips volume pushes for tabs muted in fallback mode', async () => {
       mocks.browser.tabs.update.mockRejectedValue(new Error('unsupported'));
+      mocks.autoMutedStore.snapshot.mockReturnValue({
+        'probe.test': { enabled: true },
+      });
       await applyMuteToTab(
-        makeTab({
-          id: 99,
-          url: 'https://example.com/probe',
-          mutedInfo: { muted: false },
-        }),
+        makeTab({ id: 99, url: 'https://probe.test/x', mutedInfo: { muted: false } }),
       );
       mocks.autoMutedStore.snapshot.mockReturnValue({
         'example.com': { enabled: true },
@@ -650,15 +686,153 @@ describe('background entry', () => {
       mocks.browser.tabs.query.mockResolvedValue([
         makeTab({ id: 1, url: 'https://example.com/a', mutedInfo: { muted: false } }),
       ]);
+      mocks.getAllUserMuteChoices.mockClear();
+      mocks.browser.tabs.sendMessage.mockClear();
 
-      const onAutoMuted = mocks.autoMutedStore.onChange.mock.calls[0]?.[0] as unknown as () => void;
-      onAutoMuted();
+      fireStorage(
+        { siteVolumes: { oldValue: {}, newValue: { 'example.com': vol(0.5) } } },
+        'local',
+      );
+      await flush();
+
+      expect(mocks.browser.tabs.sendMessage).not.toHaveBeenCalled();
+    });
+
+    it('pushes volume for an unmuted tab in fallback mode', async () => {
+      mocks.browser.tabs.update.mockRejectedValue(new Error('unsupported'));
+      mocks.autoMutedStore.snapshot.mockReturnValue({
+        'probe.test': { enabled: true },
+      });
+      await applyMuteToTab(
+        makeTab({ id: 99, url: 'https://probe.test/x', mutedInfo: { muted: false } }),
+      );
+      mocks.autoMutedStore.snapshot.mockReturnValue({});
+      mocks.siteVolumesStore.snapshot.mockReturnValue({
+        'example.com': vol(0.5),
+      });
+      mocks.browser.tabs.query.mockResolvedValue([
+        makeTab({ id: 1, url: 'https://example.com/a', mutedInfo: { muted: false } }),
+      ]);
+      mocks.getAllUserMuteChoices.mockClear();
+
+      fireStorage(
+        { siteVolumes: { oldValue: {}, newValue: { 'example.com': vol(0.5) } } },
+        'local',
+      );
       await flush();
 
       expect(mocks.browser.tabs.sendMessage).toHaveBeenCalledWith(1, {
         type: 'vm:volume',
-        volume: 0,
+        volume: 0.5,
       });
+    });
+
+    it('writes back over-limit entries when maxMultiplier is lowered', async () => {
+      mocks.siteVolumesStore.snapshot.mockReturnValue({
+        'example.com': vol(9),
+        'other.test': vol(2),
+      });
+      mocks.pageVolumesStore.snapshot.mockReturnValue({});
+      mocks.browser.tabs.query.mockResolvedValue([]);
+
+      fireStorage(
+        { settings: { oldValue: { maxMultiplier: 5 }, newValue: { maxMultiplier: 3 } } },
+        'sync',
+      );
+      await flush();
+
+      expect(mocks.siteVolumesStore.update).toHaveBeenCalledTimes(1);
+      const fn = mocks.siteVolumesStore.update.mock.calls[0]?.[0] as unknown as (
+        m: Record<string, VolumeEntry>,
+      ) => Record<string, VolumeEntry>;
+      const next = fn({ 'example.com': vol(9), 'other.test': vol(2) });
+      expect(next['example.com']?.multiplier).toBe(3);
+      expect(next['other.test']?.multiplier).toBe(2);
+      expect(mocks.pageVolumesStore.update).not.toHaveBeenCalled();
+    });
+
+    it('pushes the corrected value via the volume event after the write-back', async () => {
+      mocks.siteVolumesStore.snapshot.mockReturnValue({
+        'example.com': vol(3),
+      });
+      mocks.browser.tabs.query.mockResolvedValue([
+        makeTab({ id: 1, url: 'https://example.com/a', mutedInfo: { muted: false } }),
+      ]);
+
+      // This is the storage.onChanged fired by applyMaxClamp's own write-back;
+      // the volume module handles the push on its own.
+      fireStorage(
+        {
+          siteVolumes: {
+            oldValue: { 'example.com': vol(9) },
+            newValue: { 'example.com': vol(3) },
+          },
+        },
+        'local',
+      );
+      await flush();
+
+      expect(mocks.browser.tabs.sendMessage).toHaveBeenCalledWith(1, {
+        type: 'vm:volume',
+        volume: 3,
+      });
+    });
+
+    it('writes nothing when lowering maxMultiplier with no over-limit entries', async () => {
+      mocks.siteVolumesStore.snapshot.mockReturnValue({
+        'example.com': vol(2),
+      });
+      mocks.pageVolumesStore.snapshot.mockReturnValue({});
+      mocks.browser.tabs.query.mockResolvedValue([]);
+
+      fireStorage(
+        { settings: { oldValue: { maxMultiplier: 5 }, newValue: { maxMultiplier: 3 } } },
+        'sync',
+      );
+      await flush();
+
+      expect(mocks.siteVolumesStore.update).not.toHaveBeenCalled();
+      expect(mocks.pageVolumesStore.update).not.toHaveBeenCalled();
+      expect(mocks.browser.tabs.sendMessage).not.toHaveBeenCalled();
+    });
+
+    it('does nothing when maxMultiplier is raised (values already legal)', async () => {
+      mocks.siteVolumesStore.snapshot.mockReturnValue({
+        'example.com': vol(3),
+      });
+      fireStorage(
+        { settings: { oldValue: { maxMultiplier: 3 }, newValue: { maxMultiplier: 5 } } },
+        'sync',
+      );
+      await flush();
+
+      expect(mocks.siteVolumesStore.update).not.toHaveBeenCalled();
+      expect(mocks.pageVolumesStore.update).not.toHaveBeenCalled();
+      expect(mocks.browser.tabs.sendMessage).not.toHaveBeenCalled();
+    });
+
+    it('clamps existing entries when settings are first created with a lower max', async () => {
+      mocks.siteVolumesStore.snapshot.mockReturnValue({
+        'example.com': vol(9),
+        'other.test': vol(2),
+      });
+      mocks.pageVolumesStore.snapshot.mockReturnValue({});
+      mocks.browser.tabs.query.mockResolvedValue([]);
+
+      fireStorage(
+        { settings: { oldValue: undefined, newValue: { maxMultiplier: 3 } } },
+        'sync',
+      );
+      await flush();
+
+      expect(mocks.siteVolumesStore.update).toHaveBeenCalledTimes(1);
+      const fn = mocks.siteVolumesStore.update.mock.calls[0]?.[0] as unknown as (
+        m: Record<string, VolumeEntry>,
+      ) => Record<string, VolumeEntry>;
+      const next = fn({ 'example.com': vol(9), 'other.test': vol(2) });
+      expect(next['example.com']?.multiplier).toBe(3);
+      expect(next['other.test']?.multiplier).toBe(2);
+      expect(mocks.pageVolumesStore.update).not.toHaveBeenCalled();
     });
   });
 

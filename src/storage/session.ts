@@ -1,39 +1,21 @@
-const USER_MUTE_CHOICE_PREFIX = 'userMuteChoice:';
+const KEY = 'userMuteChoice';
 
-type UserMuteChoices = Record<string, boolean>;
+export type UserMuteChoices = Record<string, boolean>;
+type TabChoices = Record<string, UserMuteChoices>;
 
-// session holds the durable state; this map only serializes in-flight writes
-// while the background context is alive.
-const pendingWrites = new Map<number, Promise<void>>();
+// Every write rewrites the same blob, so all writers (any tab) serialize.
+let writeChain: Promise<void> = Promise.resolve();
 
-function userMuteChoiceKey(tabId: number): string {
-  return `${USER_MUTE_CHOICE_PREFIX}${tabId}`;
-}
-
-function enqueueWrite(tabId: number, write: () => Promise<void>): Promise<void> {
-  const previous = pendingWrites.get(tabId) ?? Promise.resolve();
-  const next = previous.then(write);
-  pendingWrites.set(tabId, next);
-  void next.then(
-    () => {
-      if (pendingWrites.get(tabId) === next) pendingWrites.delete(tabId);
-    },
-    () => {
-      if (pendingWrites.get(tabId) === next) pendingWrites.delete(tabId);
-    },
-  );
+function enqueueWrite(write: () => Promise<void>): Promise<void> {
+  const next = writeChain.then(write);
+  writeChain = next.catch(() => {});
   return next;
 }
 
-export async function getUserMuteChoice(
-  tabId: number,
-  hostname: string,
-): Promise<boolean | undefined> {
-  await pendingWrites.get(tabId);
-  const key = userMuteChoiceKey(tabId);
-  const stored = await browser.storage.session.get(key);
-  const choices = stored[key] as UserMuteChoices | undefined;
-  return choices?.[hostname];
+export async function getAllUserMuteChoices(): Promise<TabChoices> {
+  await writeChain;
+  const stored = await browser.storage.session.get(KEY);
+  return (stored[KEY] ?? {}) as TabChoices;
 }
 
 export async function rememberUserMuteChoice(
@@ -41,18 +23,21 @@ export async function rememberUserMuteChoice(
   hostname: string,
   muted: boolean,
 ): Promise<void> {
-  await enqueueWrite(tabId, async () => {
-    const key = userMuteChoiceKey(tabId);
-    const stored = await browser.storage.session.get(key);
-    const choices = (stored[key] as UserMuteChoices | undefined) ?? {};
+  await enqueueWrite(async () => {
+    const stored = await browser.storage.session.get(KEY);
+    const map = { ...((stored[KEY] ?? {}) as TabChoices) };
+    const tabKey = String(tabId);
     await browser.storage.session.set({
-      [key]: { ...choices, [hostname]: muted },
+      [KEY]: { ...map, [tabKey]: { ...(map[tabKey] ?? {}), [hostname]: muted } },
     });
   });
 }
 
 export async function clearUserMuteChoices(tabId: number): Promise<void> {
-  await enqueueWrite(tabId, async () => {
-    await browser.storage.session.remove(userMuteChoiceKey(tabId));
+  await enqueueWrite(async () => {
+    const stored = await browser.storage.session.get(KEY);
+    const map = { ...((stored[KEY] ?? {}) as TabChoices) };
+    delete map[String(tabId)];
+    await browser.storage.session.set({ [KEY]: map });
   });
 }

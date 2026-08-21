@@ -1,16 +1,17 @@
 import browser from 'webextension-polyfill';
 import { hostnameOf } from '../core/url';
+import { DEFAULT_MAX_MULTIPLIER } from '../core/constants';
 import { autoMutedStore, pageVolumesStore, siteVolumesStore } from '../storage/stores';
-import { getSettings, subscribeSettings } from '../storage/settings';
+import { getSettings } from '../storage/settings';
 import { clearUserMuteChoices, rememberUserMuteChoice } from '../storage/session';
-import { applyMuteToTab } from './mute';
-import { applyTabVolume, recomputeAll, setMaxMultiplier, volumeForSender } from './volume';
+import { applyMute, applyMuteToTab, applyMuteToTabs } from './mute';
+import { applyMaxClamp, applyVolumeToTabs, pushVolume, volumeForSender } from './volume';
+import { diffMute, diffVolumes, settingsMaxChanged } from './diff';
+import { loadApplyContext, setMaxMultiplier } from './runtime';
+import type { ApplyContext } from './runtime';
 import { reinjectContentScripts } from './reinject';
 
-// Listeners must be registered synchronously at top level: on Firefox MV3 the
-// background is a suspendable event page (and on Chrome a short-lived service
-// worker), and a wake event is delivered right after the synchronous load
-// phase. Handlers therefore await `ready` themselves before touching state.
+// Listeners must be registered synchronously at the top level (MV3).
 const ready = Promise.all([
   autoMutedStore.init(),
   siteVolumesStore.init(),
@@ -18,43 +19,33 @@ const ready = Promise.all([
   getSettings().then((s) => setMaxMultiplier(s.maxMultiplier)),
 ]);
 
-// Recomputes are collapsed and serialized: one storage event can change several
-// keys at once (each store then emits separately), and concurrent sweeps could
-// push an older snapshot after a newer one. Requests arriving together in the
-// same event-loop tick merge into a single sweep; a request arriving while a
-// sweep is running triggers exactly one follow-up sweep with the newest state.
-let scheduled = false;
-let again = false;
-
-function scheduleRecompute(): void {
-  if (scheduled) {
-    again = true;
-    return;
-  }
-  scheduled = true;
-  void ready.then(async () => {
-    try {
-      do {
-        again = false;
-        await recomputeAll(false);
-      } while (again);
-    } finally {
-      scheduled = false;
-    }
-  });
+let chain: Promise<void> = Promise.resolve();
+function enqueue(task: () => Promise<void>): void {
+  chain = chain.then(task).catch(() => {});
 }
 
-// Writers (popup, options) commit volume/mute entries through their own KVStore
-// instances; this background instance observes the committed storage changes,
-// refreshes its caches and redistributes the resulting effective volume to
-// every tab.
-autoMutedStore.onChange(scheduleRecompute);
-siteVolumesStore.onChange(scheduleRecompute);
-pageVolumesStore.onChange(scheduleRecompute);
+browser.storage.onChanged.addListener((changes, areaName) => {
+  if (areaName === 'sync') {
+    const mute = diffMute(changes['autoMuted']?.oldValue, changes['autoMuted']?.newValue);
+    if (mute.size) enqueue(() => applyMuteToTabs(mute));
 
-subscribeSettings((s) => {
-  setMaxMultiplier(s.maxMultiplier);
-  scheduleRecompute();
+    const max = settingsMaxChanged(changes['settings']?.oldValue, changes['settings']?.newValue);
+    if (max.changed) {
+      enqueue(() => {
+        setMaxMultiplier(max.newMax ?? DEFAULT_MAX_MULTIPLIER);
+        return applyMaxClamp(
+          max.oldMax ?? DEFAULT_MAX_MULTIPLIER,
+          max.newMax ?? DEFAULT_MAX_MULTIPLIER,
+        );
+      });
+    }
+  } else if (areaName === 'local') {
+    const volChanges = new Map<string, number>([
+      ...diffVolumes(changes['siteVolumes']?.oldValue, changes['siteVolumes']?.newValue),
+      ...diffVolumes(changes['pageVolumes']?.oldValue, changes['pageVolumes']?.newValue),
+    ]);
+    if (volChanges.size) enqueue(() => applyVolumeToTabs(volChanges));
+  }
 });
 
 browser.runtime.onMessage.addListener(
@@ -66,6 +57,13 @@ browser.runtime.onMessage.addListener(
     return { volume: await volumeForSender(sender.tab?.id, url) };
   },
 );
+
+async function refreshTab(tab: browser.Tabs.Tab, ctx?: ApplyContext): Promise<void> {
+  const context = ctx ?? (await loadApplyContext());
+  await applyMute(tab, context);
+  await pushVolume(tab, context, true);
+}
+
 browser.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   if (changeInfo.mutedInfo?.reason === 'user') {
     const hostname = hostnameOf(tab.url ?? tab.pendingUrl ?? '');
@@ -74,10 +72,7 @@ browser.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
     }
   }
   if (changeInfo.url || changeInfo.status === 'loading') {
-    void ready.then(async () => {
-      await applyMuteToTab(tab);
-      await applyTabVolume(tab, true);
-    });
+    void ready.then(() => refreshTab(tab)).catch(() => {});
   }
 });
 browser.tabs.onActivated.addListener(({ tabId }) => {
@@ -90,7 +85,13 @@ browser.tabs.onRemoved.addListener((tabId) => {
   void clearUserMuteChoices(tabId).catch(() => {});
 });
 
-void ready.then(() => recomputeAll(true));
+async function applyAll(): Promise<void> {
+  const tabs = await browser.tabs.query({});
+  const ctx = await loadApplyContext();
+  for (const tab of tabs) await refreshTab(tab, ctx);
+}
+
+void ready.then(applyAll);
 if (__BUILD_TARGET__ === 'chrome') {
   void ready.then(reinjectContentScripts);
 }
