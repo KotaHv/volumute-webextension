@@ -11,4 +11,4 @@ export interface UiPrefEntry {
 export const autoMutedStore = new KVStore<MuteEntry>('sync', KEYS.autoMuted, mergeByLastWrite, MUTE_MIGRATIONS, DATA_VERSION);
 export const siteVolumesStore = new KVStore<VolumeEntry>('local', KEYS.siteVolumes, mergeUnion, VOLUME_MIGRATIONS, DATA_VERSION);
 export const pageVolumesStore = new KVStore<VolumeEntry>('local', KEYS.pageVolumes, mergeUnion, VOLUME_MIGRATIONS, DATA_VERSION);
-export const uiPrefsStore = new KVStore<UiPrefEntry>('local', KEYS.uiPrefs);
+export const uiPrefsStore = new KVStore<UiPrefEntry>('local', KEYS.uiPrefs, undefined, undefined, 1);
