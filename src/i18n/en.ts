@@ -50,6 +50,11 @@ export default {
   importSuccess: 'Import succeeded',
   importFail: 'Import failed',
   confirmDeleteSelected: 'Delete selected entries?',
+  confirmDelete: 'Confirm delete',
+  deleting: 'Deleting…',
+  confirmImport: 'Confirm import',
+  importing: 'Importing…',
+  exportSuccess: 'Export succeeded',
   openOptions: 'Open settings',
   priority: 'Priority',
   helpPriority:

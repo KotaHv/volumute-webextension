@@ -32,11 +32,12 @@
     emptyText: string;
     allowMultiplierSort?: boolean;
     selected?: Set<string>;
-    onDelete?: () => void;
+    onDelete?: () => Promise<void> | void;
     selectable?: boolean;
   } = $props();
 
   let confirming = $state(false);
+  let deleting = $state(false);
   let cancelBtn: HTMLButtonElement | null = $state(null);
   let filterText = $state('');
   let sortKey = $state<SortKey>('recent');
@@ -116,13 +117,19 @@
     confirming = false;
   }
 
-  function confirmDelete(): void {
-    confirming = false;
-    onDelete();
+  async function confirmDelete(): Promise<void> {
+    if (deleting || selected.size === 0) return;
+    deleting = true;
+    try {
+      await Promise.all([onDelete(), new Promise((r) => setTimeout(r, 400))]);
+      confirming = false;
+    } finally {
+      deleting = false;
+    }
   }
 
   function handleKeydown(e: KeyboardEvent): void {
-    if (confirming && e.key === 'Escape') confirming = false;
+    if (confirming && !deleting && e.key === 'Escape') confirming = false;
   }
 </script>
 
@@ -248,10 +255,12 @@
           <span class="n">({selected.size})</span>
         </p>
         <div class="dialog-actions">
-          <button bind:this={cancelBtn} onclick={closeConfirm}>{tr('cancel', $currentLang)}</button>
-          <button class="danger" onclick={confirmDelete}
-            >{tr('deleteSelected', $currentLang)}</button
+          <button bind:this={cancelBtn} onclick={closeConfirm} disabled={deleting}
+            >{tr('cancel', $currentLang)}</button
           >
+          <button class="danger" onclick={confirmDelete} disabled={deleting || selected.size === 0}>
+            {deleting ? tr('deleting', $currentLang) : tr('confirmDelete', $currentLang)}
+          </button>
         </div>
       </div>
     </div>

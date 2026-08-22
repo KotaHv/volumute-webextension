@@ -46,20 +46,36 @@
   let pageSelected = new SvelteSet<string>();
 
   let importMode = $state<'merge' | 'overwrite'>('merge');
-  let statusMsg = $state('');
-  let statusOk = $state(false);
-  let statusTimer: ReturnType<typeof setTimeout> | null = null;
+  type ImportPhase = 'idle' | 'busy' | 'success' | 'failed';
+  let importState = $state<ImportPhase>('idle');
+  let importResetTimer: ReturnType<typeof setTimeout> | null = null;
+  type ExportPhase = 'idle' | 'success';
+  let exportState = $state<ExportPhase>('idle');
+  let exportResetTimer: ReturnType<typeof setTimeout> | null = null;
+  interface PendingImport {
+    mute: MuteMap;
+    site: SiteVolumeMap;
+    page: PageVolumeMap;
+  }
+  let pendingImport = $state<PendingImport | null>(null);
   let fileInput = $state<HTMLInputElement | null>(null);
 
-  function showStatus(msg: string, ok = false, ms = 2500): void {
-    statusMsg = msg;
-    statusOk = ok;
-    if (statusTimer) clearTimeout(statusTimer);
-    statusTimer = setTimeout(() => {
-      statusMsg = '';
-      statusOk = false;
-      statusTimer = null;
-    }, ms);
+  function setImportResult(phase: 'success' | 'failed'): void {
+    importState = phase;
+    if (importResetTimer) clearTimeout(importResetTimer);
+    importResetTimer = setTimeout(() => {
+      importState = 'idle';
+      importResetTimer = null;
+    }, 2000);
+  }
+
+  function flashExportSuccess(): void {
+    exportState = 'success';
+    if (exportResetTimer) clearTimeout(exportResetTimer);
+    exportResetTimer = setTimeout(() => {
+      exportState = 'idle';
+      exportResetTimer = null;
+    }, 2000);
   }
 
   function fmtBytes(n: number): string {
@@ -202,6 +218,7 @@
     a.download = `volumute-export-${new Date().toISOString().slice(0, 10)}.json`;
     a.click();
     URL.revokeObjectURL(url);
+    flashExportSuccess();
   }
 
   function prepareSection<T>(
@@ -214,7 +231,7 @@
     return migrateMap(migrations, (data ?? {}) as T, version, DATA_VERSION);
   }
 
-  async function importData(): Promise<void> {
+  async function prepareImport(): Promise<void> {
     const file = fileInput?.files?.[0];
     if (!file) return;
     try {
@@ -259,30 +276,69 @@
       const impSite = prepareSection(localRaw?.version, localRaw?.siteVolumes, VOLUME_MIGRATIONS);
       const impPage = prepareSection(localRaw?.version, localRaw?.pageVolumes, VOLUME_MIGRATIONS);
       if (impMute === null || impSite === null || impPage === null) {
-        showStatus(tr('importFail', $currentLang), false, 4000);
+        setImportResult('failed');
         return;
       }
+      pendingImport = { mute: impMute, site: impSite, page: impPage };
+      if (fileInput) fileInput.value = '';
+    } catch {
+      setImportResult('failed');
+    }
+  }
+
+  function closeImport(): void {
+    pendingImport = null;
+  }
+
+  async function applyImport(): Promise<void> {
+    const imp = pendingImport;
+    pendingImport = null;
+    if (!imp) return;
+    importState = 'busy';
+    const started = Date.now();
+    try {
       if (importMode === 'overwrite') {
-        await autoMutedStore.update(() => ({ ...impMute }));
-        await siteVolumesStore.update(() => ({ ...impSite }));
-        await pageVolumesStore.update(() => ({ ...impPage }));
+        await autoMutedStore.update(() => ({ ...imp.mute }));
+        await siteVolumesStore.update(() => ({ ...imp.site }));
+        await pageVolumesStore.update(() => ({ ...imp.page }));
       } else {
         await autoMutedStore.update((c) => {
           const next = { ...c };
-          for (const [k, v] of Object.entries(impMute)) {
+          for (const [k, v] of Object.entries(imp.mute)) {
             const cur = next[k];
             const lastUsed = (v as { lastUsed?: number }).lastUsed ?? 0;
             if (!cur || lastUsed > ((cur as { lastUsed?: number }).lastUsed ?? 0)) next[k] = v;
           }
           return next;
         });
-        await siteVolumesStore.update((c) => ({ ...impSite, ...c }));
-        await pageVolumesStore.update((c) => ({ ...impPage, ...c }));
+        await siteVolumesStore.update((c) => ({ ...imp.site, ...c }));
+        await pageVolumesStore.update((c) => ({ ...imp.page, ...c }));
       }
-      showStatus(tr('importSuccess', $currentLang), true);
-    } catch {
-      showStatus(tr('importFail', $currentLang), false, 4000);
+      const minBusyMs = 400;
+      const elapsed = Date.now() - started;
+      if (elapsed < minBusyMs) await new Promise((r) => setTimeout(r, minBusyMs - elapsed));
+      setImportResult('success');
+    } catch (error) {
+      console.warn('[VoluMute] import failed:', error);
+      setImportResult('failed');
     }
+  }
+
+  const importLabel = $derived.by(() => {
+    switch (importState) {
+      case 'busy':
+        return tr('importing', $currentLang);
+      case 'success':
+        return tr('importSuccess', $currentLang);
+      case 'failed':
+        return tr('importFail', $currentLang);
+      default:
+        return tr('importData', $currentLang);
+    }
+  });
+
+  function handleKeydown(e: KeyboardEvent): void {
+    if (pendingImport && e.key === 'Escape') closeImport();
   }
 
   async function setLang(lang: Lang): Promise<void> {
@@ -309,6 +365,8 @@
     void setMaxMultiplier(DEFAULT_MAX_MULTIPLIER);
   }
 </script>
+
+<svelte:window onkeydown={handleKeydown} />
 
 <main>
   <header class="titlebar">
@@ -395,12 +453,24 @@
         <section class="data-management">
           <h3>{tr('tabData', $currentLang)}</h3>
           <div class="management-actions">
-            <button class="hw-btn" onclick={exportData}>{tr('exportData', $currentLang)}</button>
+            <button
+              class="hw-btn"
+              class:ok={exportState === 'success'}
+              onclick={exportData}>{exportState === 'success'
+                ? tr('exportSuccess', $currentLang)
+                : tr('exportData', $currentLang)}</button
+            >
 
             <span class="management-divider" aria-hidden="true"></span>
 
-            <button class="hw-btn" onclick={() => fileInput?.click()}
-              >{tr('importData', $currentLang)}</button
+            <button
+              type="button"
+              class="hw-btn"
+              class:busy={importState === 'busy'}
+              class:ok={importState === 'success'}
+              class:bad={importState === 'failed'}
+              disabled={importState === 'busy'}
+              onclick={() => fileInput?.click()}>{importLabel}</button
             >
             <div class="import-mode" role="radiogroup" aria-label={tr('restoreData', $currentLang)}>
               <button
@@ -425,11 +495,8 @@
             accept="application/json"
             bind:this={fileInput}
             hidden
-            onchange={importData}
+            onchange={prepareImport}
           />
-          {#if statusMsg}
-            <div class="data-status" class:ok={statusOk}>{statusMsg}</div>
-          {/if}
         </section>
         <div class="grid">
           <DataSection
@@ -568,6 +635,41 @@
       {/if}
     </div>
   {/key}
+
+  {#if pendingImport}
+    <div
+      class="overlay"
+      role="presentation"
+      onclick={(e) => {
+        if (e.target === e.currentTarget) closeImport();
+      }}
+    >
+      <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="import-title">
+        <h4 id="import-title">{tr('restoreData', $currentLang)}</h4>
+        <p>
+          {tr('autoMute', $currentLang)}
+          <span class="n">{Object.keys(pendingImport.mute).length}</span>
+          · {tr('siteVolume', $currentLang)}
+          <span class="n">{Object.keys(pendingImport.site).length}</span>
+          · {tr('pageVolume', $currentLang)}
+          <span class="n">{Object.keys(pendingImport.page).length}</span>
+        </p>
+        <p class="mode-line">
+          {importMode === 'merge'
+            ? tr('importMerge', $currentLang)
+            : tr('importOverwrite', $currentLang)}
+        </p>
+        <div class="dialog-actions">
+          <button onclick={closeImport}>{tr('cancel', $currentLang)}</button>
+          <button class="danger" onclick={() => void applyImport()} disabled={importState === 'busy'}>
+            {importState === 'busy'
+              ? tr('importing', $currentLang)
+              : tr('confirmImport', $currentLang)}
+          </button>
+        </div>
+      </div>
+    </div>
+  {/if}
 </main>
 
 <style>
@@ -895,16 +997,99 @@
     background: var(--panel-2);
     box-shadow: var(--panel-etched);
   }
-  .data-status {
-    position: absolute;
-    right: 18px;
-    bottom: -17px;
-    color: var(--amber);
+  .overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(4, 7, 10, 0.6);
+    backdrop-filter: blur(3px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 50;
+  }
+  .dialog {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 16px;
+    min-width: 280px;
+    max-width: 90vw;
+    box-shadow: var(--shadow-dialog);
+  }
+  .dialog h4 {
+    margin: 0 0 10px;
     font-family: var(--font-mono);
     font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ink-dim);
   }
-  .data-status.ok {
+  .dialog p {
+    margin: 0;
+    font-size: 13px;
+    color: var(--ink);
+  }
+  .dialog .n {
+    color: var(--amber);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+  .dialog .mode-line {
+    margin-top: 4px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    color: var(--ink-dim);
+  }
+  .dialog-actions {
+    margin-top: 14px;
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+  }
+  .dialog-actions button {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    line-height: 1.2;
+    padding: 7px 12px;
+    border-radius: var(--radius);
+    border: 1px solid var(--line);
+    background: var(--panel-2);
+    color: var(--ink-dim);
+    cursor: pointer;
+    transition:
+      color 120ms ease,
+      border-color 120ms ease,
+      background 120ms ease;
+  }
+  .dialog-actions button:hover {
+    border-color: var(--amber);
+    color: var(--amber);
+  }
+  .dialog-actions button.danger {
+    border-color: var(--red);
+    color: var(--red);
+  }
+  .dialog-actions button.danger:hover {
+    background: var(--red);
+    color: var(--amber-fg);
+  }
+
+  .management-actions .hw-btn.ok {
     color: var(--green);
+    border-color: var(--green);
+  }
+  .management-actions .hw-btn.bad,
+  .management-actions .hw-btn.busy {
+    color: var(--ink-dim);
+    opacity: 0.7;
+    cursor: default;
   }
 
   .settings-panel {
