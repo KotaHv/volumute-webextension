@@ -30,6 +30,7 @@
     lang: 'auto',
     theme: 'auto',
     maxMultiplier: DEFAULT_MAX_MULTIPLIER,
+    popupVolumeMode: 'switch',
   });
 
   const version = displayVersion(browser.runtime.getManifest().version);
