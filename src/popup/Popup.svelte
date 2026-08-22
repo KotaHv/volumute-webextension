@@ -9,6 +9,7 @@
   import { DEFAULT_MAX_MULTIPLIER, displayVersion } from '../core/constants';
   import type { MessageKey } from '../i18n';
   import type { Settings } from '../core/types';
+  import Segmented from '../components/Segmented.svelte';
 
   let hostname = $state('');
   let path = $state('');
@@ -347,24 +348,14 @@
       class:site-active={activeSource === 'site'}
     >
       <div class="row">
-        <div class="seg" role="group">
-          <button
-            type="button"
-            class:selected={target === 'page'}
-            aria-pressed={target === 'page'}
-            onclick={() => switchTarget('page')}
-          >
-            {tr('scopePage')}
-          </button>
-          <button
-            type="button"
-            class:selected={target === 'site'}
-            aria-pressed={target === 'site'}
-            onclick={() => switchTarget('site')}
-          >
-            {tr('scopeSite')}
-          </button>
-        </div>
+        <Segmented
+          options={[
+            { value: 'page', label: tr('scopePage') },
+            { value: 'site', label: tr('scopeSite') },
+          ]}
+          value={target}
+          onselect={switchTarget}
+        />
         <span class="sp" aria-hidden="true"></span>
         <button
           type="button"
@@ -531,46 +522,6 @@
   .sp {
     flex: 1;
     min-width: 0;
-  }
-  .seg {
-    display: flex;
-    align-items: center;
-    gap: 2px;
-    padding: 3px;
-    background: var(--groove);
-    border: 1px solid var(--groove-border);
-    border-radius: var(--radius);
-    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.35);
-    flex-shrink: 0;
-  }
-  .seg button {
-    min-width: 48px;
-    border: 0;
-    border-radius: 2px;
-    background: transparent;
-    color: var(--ink-dim);
-    padding: 4px 10px;
-    font-family: var(--font-mono);
-    font-size: 10px;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-    cursor: pointer;
-    white-space: nowrap;
-    transition:
-      color 140ms ease,
-      background 140ms ease;
-  }
-  .seg button:hover {
-    color: var(--ink);
-  }
-  .seg button.selected {
-    color: var(--amber);
-    background: var(--panel-2);
-    box-shadow: var(--panel-etched);
-  }
-  .seg button:focus-visible {
-    outline: 2px solid var(--amber);
-    outline-offset: 1px;
   }
   .ch-label {
     flex: 1;

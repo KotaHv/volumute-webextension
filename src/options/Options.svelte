@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { SvelteSet } from 'svelte/reactivity';
   import DataSection from './DataSection.svelte';
+  import Segmented from '../components/Segmented.svelte';
   import { autoMutedStore, pageVolumesStore, siteVolumesStore } from '../storage/stores';
   import { getSettings, subscribeSettings, updateSettings } from '../storage/settings';
   import { currentLang, setCurrentLang, tr } from '../i18n/svelte';
@@ -453,55 +454,31 @@
           <section class="settings-panel">
             <div class="setting-row">
               <h3>{tr('language', $currentLang)}</h3>
-              <div class="segmented" role="radiogroup" aria-label={tr('language', $currentLang)}>
-                <button
-                  type="button"
-                  class:selected={settings.lang === 'auto'}
-                  role="radio"
-                  aria-checked={settings.lang === 'auto'}
-                  onclick={() => setLang('auto')}>{tr('langAuto', $currentLang)}</button
-                >
-                <button
-                  type="button"
-                  class:selected={settings.lang === 'zh'}
-                  role="radio"
-                  aria-checked={settings.lang === 'zh'}
-                  onclick={() => setLang('zh')}>中文</button
-                >
-                <button
-                  type="button"
-                  class:selected={settings.lang === 'en'}
-                  role="radio"
-                  aria-checked={settings.lang === 'en'}
-                  onclick={() => setLang('en')}>English</button
-                >
-              </div>
+              <Segmented
+                wide
+                ariaLabel={tr('language', $currentLang)}
+                value={settings.lang}
+                onselect={setLang}
+                options={[
+                  { value: 'auto', label: tr('langAuto', $currentLang) },
+                  { value: 'zh', label: '中文' },
+                  { value: 'en', label: 'English' },
+                ]}
+              />
             </div>
             <div class="setting-row">
               <h3>{tr('theme', $currentLang)}</h3>
-              <div class="segmented" role="radiogroup" aria-label={tr('theme', $currentLang)}>
-                <button
-                  type="button"
-                  class:selected={settings.theme === 'auto'}
-                  role="radio"
-                  aria-checked={settings.theme === 'auto'}
-                  onclick={() => setTheme('auto')}>{tr('themeAuto', $currentLang)}</button
-                >
-                <button
-                  type="button"
-                  class:selected={settings.theme === 'light'}
-                  role="radio"
-                  aria-checked={settings.theme === 'light'}
-                  onclick={() => setTheme('light')}>{tr('themeLight', $currentLang)}</button
-                >
-                <button
-                  type="button"
-                  class:selected={settings.theme === 'dark'}
-                  role="radio"
-                  aria-checked={settings.theme === 'dark'}
-                  onclick={() => setTheme('dark')}>{tr('themeDark', $currentLang)}</button
-                >
-              </div>
+              <Segmented
+                wide
+                ariaLabel={tr('theme', $currentLang)}
+                value={settings.theme}
+                onselect={setTheme}
+                options={[
+                  { value: 'auto', label: tr('themeAuto', $currentLang) },
+                  { value: 'light', label: tr('themeLight', $currentLang) },
+                  { value: 'dark', label: tr('themeDark', $currentLang) },
+                ]}
+              />
             </div>
             <div class="setting-row">
               <h3>{tr('maxVolume', $currentLang)}</h3>
@@ -939,42 +916,6 @@
     color: var(--ink);
     text-shadow: var(--engrave-shadow);
   }
-  .segmented {
-    display: flex;
-    align-items: center;
-    gap: 2px;
-    padding: 3px;
-    background: var(--groove);
-    border: 1px solid var(--groove-border);
-    border-radius: var(--radius);
-    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.35);
-    width: min(19rem, 100%);
-  }
-  .segmented button {
-    flex: 1;
-    border: 0;
-    border-radius: 2px;
-    background: transparent;
-    color: var(--ink-dim);
-    padding: 8px 8px;
-    font-family: var(--font-mono);
-    font-size: 10px;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-    cursor: pointer;
-    white-space: nowrap;
-    transition:
-      color 140ms ease,
-      background 140ms ease;
-  }
-  .segmented button:hover {
-    color: var(--ink);
-  }
-  .segmented button.selected {
-    color: var(--amber);
-    background: var(--panel-2);
-    box-shadow: var(--panel-etched);
-  }
   .tab-panel {
     animation: tab-panel-in 180ms ease-out both;
   }
@@ -1161,14 +1102,6 @@
     }
     .setting-row h3 {
       flex-basis: auto;
-    }
-    .segmented {
-      width: 100%;
-    }
-    .segmented button {
-      flex: 1;
-      min-width: 0;
-      padding-inline: 6px;
     }
     .import-mode {
       width: 100%;
