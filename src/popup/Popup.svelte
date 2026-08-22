@@ -332,7 +332,7 @@
   </header>
 
   {#if hostname}
-    <div class="site">
+    <div class="site" class:dual={settings.popupVolumeMode === 'dual'}>
       <span class="site-name">{tabTitle}</span>
       <span class="site-host">{hostname}</span>
     </div>
@@ -408,9 +408,9 @@
 
 <style>
   main {
-    width: 344px;
+    width: 360px;
     max-width: 100%;
-    padding: 14px;
+    padding: 16px;
     font-family: var(--font-sans);
     background: var(--bg);
     color: var(--ink);
@@ -457,17 +457,23 @@
   }
 
   .site {
-    padding: 10px 2px 6px;
+    padding: 54px 4px 42px;
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    align-items: center;
+    gap: 4px;
+    text-align: center;
+  }
+  .site.dual {
+    padding: 78px 4px 57px;
   }
   .site-name {
-    font-size: 14px;
+    font-size: 15px;
     font-weight: 600;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    max-width: 100%;
   }
   .site-host {
     font-family: var(--font-mono);
@@ -556,5 +562,6 @@
     margin: 14px 2px;
     font-size: 13px;
     color: var(--ink-dim);
+    text-align: center;
   }
 </style>

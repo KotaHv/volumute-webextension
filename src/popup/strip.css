@@ -1,5 +1,5 @@
 .strip {
-  margin-top: 8px;
+  margin-top: 10px;
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: var(--radius);
