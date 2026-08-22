@@ -435,7 +435,6 @@
     letter-spacing: 0.26em;
     line-height: 1;
     color: var(--ink);
-    text-shadow: var(--engrave-shadow);
   }
   .brand-mark {
     color: var(--ink-dim);

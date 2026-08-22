@@ -633,7 +633,6 @@
     line-height: 1;
     text-overflow: ellipsis;
     white-space: nowrap;
-    text-shadow: var(--engrave-shadow);
   }
   .ver {
     align-self: flex-end;
@@ -653,7 +652,7 @@
     background: var(--groove);
     border: 1px solid var(--groove-border);
     border-radius: var(--radius);
-    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.35);
+    box-shadow: var(--well-shadow);
   }
   .tab-switch button {
     flex: 1;
@@ -729,7 +728,6 @@
     letter-spacing: 0.12em;
     text-transform: uppercase;
     color: var(--ink);
-    text-shadow: var(--engrave-shadow);
   }
   .data-summary-head .icon-btn {
     display: inline-flex;
@@ -775,7 +773,7 @@
     background: var(--groove);
     border: 1px solid var(--groove-border);
     border-radius: var(--radius);
-    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.3);
+    box-shadow: var(--well-shadow);
   }
   .quota-stat-head {
     display: flex;
@@ -806,7 +804,7 @@
     background: var(--bg);
     border: 1px solid var(--groove-border);
     border-radius: 2px;
-    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.35);
+    box-shadow: var(--well-shadow);
     padding: 3px 6px;
     line-height: 1.2;
   }
@@ -835,7 +833,6 @@
     letter-spacing: 0.12em;
     text-transform: uppercase;
     color: var(--ink);
-    text-shadow: var(--engrave-shadow);
   }
   .management-actions {
     display: flex;
@@ -863,7 +860,7 @@
     background: var(--groove);
     border: 1px solid var(--groove-border);
     border-radius: var(--radius);
-    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.35);
+    box-shadow: var(--well-shadow);
     width: min(11rem, 100%);
   }
   .import-mode button {
@@ -934,7 +931,6 @@
     letter-spacing: 0.12em;
     text-transform: uppercase;
     color: var(--ink);
-    text-shadow: var(--engrave-shadow);
   }
   .tab-panel {
     animation: tab-panel-in 180ms ease-out both;
@@ -970,7 +966,7 @@
     background: var(--groove);
     border: 1px solid var(--groove-border);
     border-radius: var(--radius) 0 0 var(--radius);
-    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.35);
+    box-shadow: var(--well-shadow);
     padding: 8px 4px;
   }
   .max-volume-value input[type='text']:focus {

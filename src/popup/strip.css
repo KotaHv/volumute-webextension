@@ -40,7 +40,6 @@
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--ink);
-  text-shadow: var(--engrave-shadow);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

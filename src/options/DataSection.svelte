@@ -279,7 +279,6 @@
     letter-spacing: 0.12em;
     text-transform: uppercase;
     color: var(--ink-dim);
-    text-shadow: var(--engrave-shadow);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -295,7 +294,7 @@
     background: var(--groove);
     border: 1px solid var(--groove-border);
     border-radius: 2px;
-    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.3);
+    box-shadow: var(--well-shadow);
     padding: 2px 7px;
     line-height: 1.4;
   }
@@ -317,7 +316,7 @@
     background: var(--groove);
     border: 1px solid var(--groove-border);
     border-radius: var(--radius);
-    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.35);
+    box-shadow: var(--well-shadow);
   }
   .filter::placeholder {
     color: var(--ink-faint);
@@ -345,7 +344,7 @@
     background: var(--groove);
     border: 1px solid var(--groove-border);
     border-radius: var(--radius);
-    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.35);
+    box-shadow: var(--well-shadow);
     padding: 0 9px;
     cursor: pointer;
   }
@@ -407,7 +406,7 @@
     border: 1px solid var(--line-strong);
     border-radius: 2px;
     background: var(--groove);
-    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.35);
+    box-shadow: var(--well-shadow);
     cursor: pointer;
   }
   .row input[type='checkbox']:hover {
@@ -484,7 +483,7 @@
     background: var(--bg);
     border: 1px solid var(--groove-border);
     border-radius: 2px;
-    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.35);
+    box-shadow: var(--well-shadow);
     padding: 4px 7px;
     line-height: 1.3;
   }
@@ -532,7 +531,6 @@
     letter-spacing: 0.12em;
     text-transform: uppercase;
     color: var(--ink-dim);
-    text-shadow: var(--engrave-shadow);
   }
   .dialog p {
     margin: 0;

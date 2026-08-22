@@ -46,7 +46,7 @@
     box-sizing: border-box;
     background: var(--groove);
     border-radius: 2px;
-    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.35);
+    box-shadow: var(--well-shadow);
     padding: 0 6px;
   }
   .led-well:focus-within {

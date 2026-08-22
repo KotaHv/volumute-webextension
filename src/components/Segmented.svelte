@@ -42,7 +42,7 @@
     background: var(--groove);
     border: 1px solid var(--groove-border);
     border-radius: var(--radius);
-    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.35);
+    box-shadow: var(--well-shadow);
   }
   .segmented.wide {
     display: flex;
