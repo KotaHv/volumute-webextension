@@ -11,7 +11,7 @@ export const KEYS = {
 
 export const DATA_VERSION = 2;
 export const MIN_SUPPORTED_VERSION = 1;
-export const SCHEMA_VERSION_PREFIX = 'schemaVersion';
+const SCHEMA_VERSION_PREFIX = 'schemaVersion';
 export const schemaVersionKey = (key: string): string => `${SCHEMA_VERSION_PREFIX}:${key}`;
 
 export const MIN_MULTIPLIER = 1;

@@ -7,7 +7,7 @@ import type { ApplyContext } from './runtime';
 
 const TOUCH_THROTTLE_MS = 10_000;
 
-export async function setTabMuted(tabId: number, muted: boolean): Promise<void> {
+async function setTabMuted(tabId: number, muted: boolean): Promise<void> {
   try {
     await browser.tabs.update(tabId, { muted });
   } catch (error) {

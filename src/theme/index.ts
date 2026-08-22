@@ -2,7 +2,7 @@ import type { ThemeMode } from '../core/types';
 
 const mql = typeof matchMedia === 'function' ? matchMedia('(prefers-color-scheme: dark)') : null;
 
-export function resolveTheme(mode: ThemeMode): 'light' | 'dark' {
+function resolveTheme(mode: ThemeMode): 'light' | 'dark' {
   if (mode !== 'auto') return mode;
   return mql?.matches ? 'dark' : 'light';
 }
