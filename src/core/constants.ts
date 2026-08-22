@@ -4,6 +4,7 @@ export const KEYS = {
   pageVolumes: 'pageVolumes',
   settings: 'settings',
   deviceId: 'deviceId',
+  uiPrefs: 'uiPrefs',
 } as const;
 
 export const DATA_VERSION = 2;

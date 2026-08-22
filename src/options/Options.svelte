@@ -3,7 +3,7 @@
   import { SvelteSet } from 'svelte/reactivity';
   import DataSection from './DataSection.svelte';
   import Segmented from '../components/Segmented.svelte';
-  import { autoMutedStore, pageVolumesStore, siteVolumesStore } from '../storage/stores';
+  import { autoMutedStore, pageVolumesStore, siteVolumesStore, uiPrefsStore } from '../storage/stores';
   import { getSettings, subscribeSettings, updateSettings } from '../storage/settings';
   import { currentLang, setCurrentLang, tr } from '../i18n/svelte';
   import { applyTheme } from '../theme';
@@ -61,14 +61,6 @@
     }, ms);
   }
 
-  function fmt(ts: number): string {
-    return new Date(ts).toLocaleString();
-  }
-
-  function pct(v: number): string {
-    return `${Math.round(v * 100)}%`;
-  }
-
   function fmtBytes(n: number): string {
     if (n >= 1024 * 1024 * 1024) return `${(n / (1024 * 1024 * 1024)).toFixed(1)} GB`;
     if (n >= 1024 * 1024) return `${(n / (1024 * 1024)).toFixed(1)} MB`;
@@ -80,7 +72,9 @@
     Object.entries(muteMap).map(([host, e]) => ({
       key: host,
       value: host,
-      sub: `${tr('muteEnabled', $currentLang)} · ${tr('created', $currentLang)}: ${fmt(e.created)} · ${tr('siteLastUsed', $currentLang)}: ${fmt(e.lastUsed)}`,
+      created: e.created,
+      lastUsed: e.lastUsed,
+      muted: true,
     })),
   );
 
@@ -88,7 +82,9 @@
     Object.entries(siteMap).map(([host, e]) => ({
       key: host,
       value: host,
-      sub: `${tr('volumeMultiplier', $currentLang)}: ${pct(e.multiplier)} · ${tr('created', $currentLang)}: ${fmt(e.created)} · ${tr('siteLastUsed', $currentLang)}: ${fmt(e.lastUsed)}`,
+      created: e.created,
+      lastUsed: e.lastUsed,
+      multiplier: e.multiplier,
     })),
   );
 
@@ -96,7 +92,9 @@
     Object.entries(pageMap).map(([url, e]) => ({
       key: url,
       value: url,
-      sub: `${tr('volumeMultiplier', $currentLang)}: ${pct(e.multiplier)} · ${tr('created', $currentLang)}: ${fmt(e.created)} · ${tr('siteLastUsed', $currentLang)}: ${fmt(e.lastUsed)}`,
+      created: e.created,
+      lastUsed: e.lastUsed,
+      multiplier: e.multiplier,
     })),
   );
 
@@ -116,7 +114,12 @@
       setCurrentLang(s.lang);
       applyTheme(s.theme);
     });
-    await Promise.all([autoMutedStore.init(), siteVolumesStore.init(), pageVolumesStore.init()]);
+    await Promise.all([
+      autoMutedStore.init(),
+      siteVolumesStore.init(),
+      pageVolumesStore.init(),
+      uiPrefsStore.init(),
+    ]);
     muteMap = autoMutedStore.snapshot();
     siteMap = siteVolumesStore.snapshot();
     pageMap = pageVolumesStore.snapshot();
@@ -429,13 +432,15 @@
         </section>
         <div class="grid">
           <DataSection
-            title={tr('tabSiteList', $currentLang) + ': ' + tr('autoMute', $currentLang)}
+            id="mutes"
+            title={tr('autoMute', $currentLang)}
             rows={muteRows}
             emptyText={tr('noEntries', $currentLang)}
             selected={muteSelected}
             onDelete={deleteMutes}
           />
           <DataSection
+            id="sites"
             title={tr('siteVolume', $currentLang)}
             rows={siteRows}
             emptyText={tr('noEntries', $currentLang)}
@@ -443,6 +448,7 @@
             onDelete={deleteSites}
           />
           <DataSection
+            id="pages"
             title={tr('pageVolume', $currentLang)}
             rows={pageRows}
             emptyText={tr('noEntries', $currentLang)}
