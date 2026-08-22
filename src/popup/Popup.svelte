@@ -410,7 +410,7 @@
   main {
     width: 360px;
     max-width: 100%;
-    padding: 16px;
+    padding: 9px 16px;
     font-family: var(--font-sans);
     background: var(--bg);
     color: var(--ink);
@@ -425,7 +425,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 2px 2px 10px;
+    padding: 2px 2px 9px;
     border-bottom: 1px solid var(--line);
   }
   .brand-name {
@@ -529,8 +529,8 @@
   }
 
   footer {
-    margin-top: 10px;
-    padding-top: 8px;
+    margin-top: 9px;
+    padding-top: 9px;
     border-top: 1px solid var(--line);
     display: flex;
     align-items: center;
