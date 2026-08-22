@@ -2,7 +2,7 @@ import browser from 'webextension-polyfill';
 import { hostnameOf, pathKeyOf } from '../core/url';
 import { computeGain } from '../core/priority';
 import { autoMutedStore } from '../storage/stores';
-import { loadApplyContext, maxMultiplier, pushGain, setTabMuteSupported, shouldMuteFor, tabMuteSupported } from './runtime';
+import { loadApplyContext, maxMultiplier, pushGain, shouldMuteFor, tabMuteSupported } from './runtime';
 import type { ApplyContext } from './runtime';
 
 const TOUCH_THROTTLE_MS = 10_000;
@@ -10,11 +10,8 @@ const TOUCH_THROTTLE_MS = 10_000;
 export async function setTabMuted(tabId: number, muted: boolean): Promise<void> {
   try {
     await browser.tabs.update(tabId, { muted });
-    if (tabMuteSupported === null) setTabMuteSupported(true);
   } catch (error) {
-    // The first failure doubles as the fallback probe (Firefox Android).
     console.warn('[VoluMute] native mute update failed for tab', tabId, ':', error);
-    if (tabMuteSupported === null) setTabMuteSupported(false);
   }
 }
 
@@ -47,9 +44,8 @@ async function pushFallbackGain(
   await pushGain(tab.id, gain);
 }
 
-// Never lift a silence that is not ours. When the first native attempt reveals
-// fallback mode, the probe failure itself still needs the gain delivered.
-// Returns whether a mute happened, so callers touch the entry per hostname.
+// Never lift a silence that is not ours. Returns whether a mute happened, so
+// callers touch the entry per hostname.
 async function syncTabMute(
   tab: browser.Tabs.Tab,
   shouldMute: boolean,
@@ -58,13 +54,14 @@ async function syncTabMute(
   url: string,
 ): Promise<boolean> {
   if (tab.id === undefined) return false;
-  if (tabMuteSupported === null || tabMuteSupported === true) {
+  if (await tabMuteSupported()) {
     const isMuted = tab.mutedInfo?.muted ?? false;
     if (isMuted === shouldMute) return false;
     const pluginMuted = tab.mutedInfo?.reason === 'extension';
     if (shouldMute || pluginMuted) await setTabMuted(tab.id, shouldMute);
+  } else {
+    await pushFallbackGain(tab, shouldMute, ctx, hostname, url);
   }
-  if (tabMuteSupported === false) await pushFallbackGain(tab, shouldMute, ctx, hostname, url);
   return shouldMute;
 }
 

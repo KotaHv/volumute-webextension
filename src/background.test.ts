@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => {
     },
     runtime: {
       onMessage: { addListener: vi.fn() },
+      getPlatformInfo: vi.fn(),
     },
     storage: {
       onChanged: { addListener: vi.fn() },
@@ -142,6 +143,7 @@ describe('background entry', () => {
     mocks.getSettings.mockResolvedValue(defaultSettings);
     mocks.getAllUserMuteChoices.mockResolvedValue({});
     mocks.browser.storage.session.get.mockResolvedValue({});
+    mocks.browser.runtime.getPlatformInfo.mockResolvedValue({ os: 'win' });
     mocks.browser.tabs.update.mockResolvedValue(undefined);
     mocks.browser.tabs.sendMessage.mockResolvedValue(undefined);
     mocks.browser.tabs.query.mockResolvedValue([]);
@@ -150,18 +152,6 @@ describe('background entry', () => {
   });
 
   describe('applyMuteToTab', () => {
-    async function establishNativeMuteSupport(): Promise<void> {
-      await applyMuteToTab(
-        makeTab({
-          id: 99,
-          url: 'https://example.com/probe',
-          mutedInfo: { muted: false },
-        }),
-      );
-      mocks.browser.tabs.update.mockClear();
-      mocks.autoMutedStore.touchEntry.mockClear();
-    }
-
     it('returns without touching the tab when it has no id', async () => {
       await applyMuteToTab(makeTab({ url: 'https://example.com/page' }));
 
@@ -199,42 +189,6 @@ describe('background entry', () => {
         'example.com': { enabled: true },
       });
       mocks.getAllUserMuteChoices.mockResolvedValue({ '2': { 'example.com': false } });
-
-      await applyMuteToTab(
-        makeTab({
-          id: 2,
-          url: 'https://example.com/page',
-          mutedInfo: { muted: true, reason: 'extension' },
-        }),
-      );
-
-      expect(mocks.browser.tabs.update).toHaveBeenCalledWith(2, { muted: false });
-      expect(mocks.autoMutedStore.touchEntry).not.toHaveBeenCalled();
-    });
-
-    it('uses native tab muting after support has been detected', async () => {
-      await establishNativeMuteSupport();
-      mocks.autoMutedStore.snapshot.mockReturnValue({
-        'example.com': { enabled: true },
-      });
-
-      await applyMuteToTab(
-        makeTab({
-          id: 2,
-          url: 'https://example.com/page',
-          mutedInfo: { muted: false },
-        }),
-      );
-
-      expect(mocks.browser.tabs.update).toHaveBeenCalledWith(2, { muted: true });
-    });
-
-    it('uses native tab unmuting for a remembered user choice', async () => {
-      await establishNativeMuteSupport();
-      mocks.getAllUserMuteChoices.mockResolvedValue({ '2': { 'example.com': false } });
-      mocks.autoMutedStore.snapshot.mockReturnValue({
-        'example.com': { enabled: true },
-      });
 
       await applyMuteToTab(
         makeTab({
@@ -291,8 +245,8 @@ describe('background entry', () => {
       expect(mocks.browser.tabs.sendMessage).not.toHaveBeenCalled();
     });
 
-    it('delivers fallback mute through a gain 0 push when the probe fails', async () => {
-      mocks.browser.tabs.update.mockRejectedValue(new Error('unsupported'));
+    it('delivers fallback mute through a gain 0 push on platforms without native muting', async () => {
+      mocks.browser.runtime.getPlatformInfo.mockResolvedValue({ os: 'android' });
       mocks.autoMutedStore.snapshot.mockReturnValue({
         'example.com': { enabled: true },
       });
@@ -305,14 +259,15 @@ describe('background entry', () => {
         }),
       );
 
+      expect(mocks.browser.tabs.update).not.toHaveBeenCalled();
       expect(mocks.browser.tabs.sendMessage).toHaveBeenCalledWith(3, {
         type: 'vm:volume',
         volume: 0,
       });
     });
 
-    it('does not touch when unmuting via a user choice in fallback mode', async () => {
-      mocks.browser.tabs.update.mockRejectedValue(new Error('unsupported'));
+    it('restores audible gain without touching when unmuting via a user choice in fallback mode', async () => {
+      mocks.browser.runtime.getPlatformInfo.mockResolvedValue({ os: 'android' });
       mocks.getAllUserMuteChoices.mockResolvedValue({ '5': { 'example.com': false } });
       mocks.autoMutedStore.snapshot.mockReturnValue({
         'example.com': { enabled: true },
@@ -326,7 +281,10 @@ describe('background entry', () => {
         }),
       );
 
-      expect(mocks.browser.tabs.sendMessage).not.toHaveBeenCalled();
+      expect(mocks.browser.tabs.sendMessage).toHaveBeenCalledWith(5, {
+        type: 'vm:volume',
+        volume: 1,
+      });
       expect(mocks.autoMutedStore.touchEntry).not.toHaveBeenCalled();
     });
 
@@ -415,17 +373,7 @@ describe('background entry', () => {
     });
 
     it('answers with gain 0 for a muted tab in fallback mode', async () => {
-      mocks.browser.tabs.update.mockRejectedValue(new Error('unsupported'));
-      mocks.autoMutedStore.snapshot.mockReturnValue({
-        'probe.test': { enabled: true },
-      });
-      await applyMuteToTab(
-        makeTab({
-          id: 99,
-          url: 'https://probe.test/x',
-          mutedInfo: { muted: false },
-        }),
-      );
+      mocks.browser.runtime.getPlatformInfo.mockResolvedValue({ os: 'android' });
       mocks.autoMutedStore.snapshot.mockReturnValue({
         'example.com': { enabled: true },
       });
@@ -601,13 +549,7 @@ describe('background entry', () => {
     });
 
     it('pushes gain 0 in fallback mode when a site is auto-muted', async () => {
-      mocks.browser.tabs.update.mockRejectedValue(new Error('unsupported'));
-      mocks.autoMutedStore.snapshot.mockReturnValue({
-        'probe.test': { enabled: true },
-      });
-      await applyMuteToTab(
-        makeTab({ id: 99, url: 'https://probe.test/x', mutedInfo: { muted: false } }),
-      );
+      mocks.browser.runtime.getPlatformInfo.mockResolvedValue({ os: 'android' });
       mocks.autoMutedStore.snapshot.mockReturnValue({
         'example.com': { enabled: true },
       });
@@ -644,18 +586,11 @@ describe('background entry', () => {
     });
 
     it('restores the gain after a fallback mute when the site auto-mute is disabled', async () => {
-      mocks.browser.tabs.update.mockRejectedValue(new Error('unsupported'));
-      mocks.autoMutedStore.snapshot.mockReturnValue({
-        'probe.test': { enabled: true },
-      });
-      await applyMuteToTab(
-        makeTab({ id: 99, url: 'https://probe.test/x', mutedInfo: { muted: false } }),
-      );
+      mocks.browser.runtime.getPlatformInfo.mockResolvedValue({ os: 'android' });
       mocks.autoMutedStore.snapshot.mockReturnValue({});
       mocks.browser.tabs.query.mockResolvedValue([
         makeTab({ id: 1, url: 'https://example.com/a', mutedInfo: { muted: false } }),
       ]);
-      mocks.getAllUserMuteChoices.mockClear();
 
       fireStorage(
         {
@@ -675,13 +610,7 @@ describe('background entry', () => {
     });
 
     it('skips volume pushes for tabs muted in fallback mode', async () => {
-      mocks.browser.tabs.update.mockRejectedValue(new Error('unsupported'));
-      mocks.autoMutedStore.snapshot.mockReturnValue({
-        'probe.test': { enabled: true },
-      });
-      await applyMuteToTab(
-        makeTab({ id: 99, url: 'https://probe.test/x', mutedInfo: { muted: false } }),
-      );
+      mocks.browser.runtime.getPlatformInfo.mockResolvedValue({ os: 'android' });
       mocks.autoMutedStore.snapshot.mockReturnValue({
         'example.com': { enabled: true },
       });
@@ -691,8 +620,6 @@ describe('background entry', () => {
       mocks.browser.tabs.query.mockResolvedValue([
         makeTab({ id: 1, url: 'https://example.com/a', mutedInfo: { muted: false } }),
       ]);
-      mocks.getAllUserMuteChoices.mockClear();
-      mocks.browser.tabs.sendMessage.mockClear();
 
       fireStorage(
         { siteVolumes: { oldValue: {}, newValue: { 'example.com': vol(0.5) } } },
@@ -704,21 +631,13 @@ describe('background entry', () => {
     });
 
     it('pushes volume for an unmuted tab in fallback mode', async () => {
-      mocks.browser.tabs.update.mockRejectedValue(new Error('unsupported'));
-      mocks.autoMutedStore.snapshot.mockReturnValue({
-        'probe.test': { enabled: true },
-      });
-      await applyMuteToTab(
-        makeTab({ id: 99, url: 'https://probe.test/x', mutedInfo: { muted: false } }),
-      );
-      mocks.autoMutedStore.snapshot.mockReturnValue({});
+      mocks.browser.runtime.getPlatformInfo.mockResolvedValue({ os: 'android' });
       mocks.siteVolumesStore.snapshot.mockReturnValue({
         'example.com': vol(0.5),
       });
       mocks.browser.tabs.query.mockResolvedValue([
         makeTab({ id: 1, url: 'https://example.com/a', mutedInfo: { muted: false } }),
       ]);
-      mocks.getAllUserMuteChoices.mockClear();
 
       fireStorage(
         { siteVolumes: { oldValue: {}, newValue: { 'example.com': vol(0.5) } } },

@@ -105,12 +105,6 @@ describe('computeGain', () => {
     ).toBe(0.5);
   });
 
-  it('treats the unknown probe state like native availability (no gain 0 on mute)', () => {
-    expect(
-      computeGain(true, null, emptyPage, { 'example.com': vol(0.5) }, '', 'example.com', 5),
-    ).toBe(0.5);
-  });
-
   it('returns 0 for a muted tab in fallback mode', () => {
     expect(
       computeGain(true, false, emptyPage, { 'example.com': vol(0.5) }, '', 'example.com', 5),

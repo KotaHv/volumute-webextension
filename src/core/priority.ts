@@ -26,14 +26,14 @@ export function isAutoMuted(muteMap: MuteMap, hostname: string): boolean {
 // layer owns the silence).
 export function computeGain(
   shouldMute: boolean,
-  nativeMuteSupported: boolean | null,
+  nativeMuteSupported: boolean,
   pageVolumes: PageVolumeMap,
   siteVolumes: SiteVolumeMap,
   path: string,
   hostname: string,
   max = DEFAULT_MAX_MULTIPLIER,
 ): number {
-  if (shouldMute && nativeMuteSupported === false) return 0;
+  if (shouldMute && !nativeMuteSupported) return 0;
   return computeMultiplier(pageVolumes, siteVolumes, path, hostname, max);
 }
 

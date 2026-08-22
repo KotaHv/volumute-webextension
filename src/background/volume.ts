@@ -17,7 +17,7 @@ async function syncTabVolume(
 ): Promise<void> {
   if (tab.id === undefined) return;
   const shouldMute = shouldMuteFor(ctx, tab.id, hostname);
-  if (shouldMute && tabMuteSupported === false) return;
+  if (shouldMute && !(await tabMuteSupported())) return;
   if (touch && !shouldMute) {
     if (path && ctx.pageVolumes[path]) {
       await pageVolumesStore.touchEntry(path);
@@ -88,7 +88,7 @@ export async function volumeForSender(tabId: number | undefined, url: string): P
   const ctx = await loadApplyContext();
   return computeGain(
     shouldMuteFor(ctx, tabId, hostname),
-    tabMuteSupported,
+    await tabMuteSupported(),
     ctx.pageVolumes,
     ctx.siteVolumes,
     pathKeyOf(url) ?? '',

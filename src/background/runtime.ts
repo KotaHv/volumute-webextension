@@ -6,12 +6,12 @@ import { autoMutedStore, pageVolumesStore, siteVolumesStore } from '../storage/s
 import { getAllUserMuteChoices } from '../storage/session';
 import type { UserMuteChoices } from '../storage/session';
 
-// Firefox Android rejects tabs.update({ muted }); the first natural attempt is
-// the probe. Until it resolves, the unknown state behaves like "supported".
-export let tabMuteSupported: boolean | null = null;
+let supportedPromise: Promise<boolean> | null = null;
 
-export function setTabMuteSupported(value: boolean): void {
-  tabMuteSupported = value;
+export function tabMuteSupported(): Promise<boolean> {
+  return (supportedPromise ??= browser.runtime
+    .getPlatformInfo()
+    .then((p) => p.os !== 'android'));
 }
 
 export let maxMultiplier = DEFAULT_MAX_MULTIPLIER;
