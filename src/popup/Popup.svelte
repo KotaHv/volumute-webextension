@@ -8,8 +8,10 @@
   import { hostnameOf, pathKeyOf } from '../core/url';
   import { DEFAULT_MAX_MULTIPLIER, displayVersion } from '../core/constants';
   import type { MessageKey } from '../i18n';
-  import type { Settings } from '../core/types';
-  import Segmented from '../components/Segmented.svelte';
+  import type { Settings, VolumeScope } from '../core/types';
+  import './strip.css';
+  import VolumeScopeSwitch from './VolumeScopeSwitch.svelte';
+  import VolumeDualSliders from './VolumeDualSliders.svelte';
 
   let hostname = $state('');
   let path = $state('');
@@ -18,13 +20,14 @@
     lang: 'auto',
     theme: 'auto',
     maxMultiplier: DEFAULT_MAX_MULTIPLIER,
+    popupVolumeMode: 'switch',
   });
   let muted = $state(false);
   let pageVol = $state(1);
   let siteVol = $state(1);
   let hasPageVol = $state(false);
   let hasSiteVol = $state(false);
-  let target = $state<'page' | 'site'>('page');
+  let target = $state<VolumeScope>('page');
   let previewVol = $state<number | null>(null);
 
   const version = displayVersion(browser.runtime.getManifest().version);
@@ -37,7 +40,15 @@
     muted ? 'mute' : hasPageVol ? 'page' : hasSiteVol ? 'site' : 'default',
   );
 
-  type IconState = 'mute' | 'low' | 'normal' | 'boost';
+  const effectiveSource = $derived(
+    activeSource === 'page' || activeSource === 'site' ? activeSource : null,
+  );
+  const switchMode = $derived(settings.popupVolumeMode === 'switch');
+
+  const scopeStore = (scope: VolumeScope) =>
+    scope === 'page' ? pageVolumesStore : siteVolumesStore;
+  const scopeKey = (scope: VolumeScope) => (scope === 'page' ? path : hostname);
+
   const activeVol = $derived(
     activeSource === 'page'
       ? Math.min(pageVol, settings.maxMultiplier)
@@ -45,7 +56,6 @@
         ? Math.min(siteVol, settings.maxMultiplier)
         : 1,
   );
-  const activePct = $derived(Math.round(activeVol * 100));
 
   const shownRaw = $derived(
     target === 'page'
@@ -60,14 +70,14 @@
   const targetHasVol = $derived(target === 'page' ? hasPageVol : hasSiteVol);
   const targetAriaLabel = $derived(target === 'page' ? tr('pageVolume') : tr('siteVolume'));
 
-  const iconState: IconState = $derived(
+  const iconState = $derived<'mute' | 'low' | 'normal' | 'boost'>(
     activeSource === 'mute'
       ? 'mute'
       : activeSource === 'default'
         ? 'normal'
-        : activePct < 100
+        : Math.round(activeVol * 100) < 100
           ? 'low'
-          : activePct > 100
+          : Math.round(activeVol * 100) > 100
             ? 'boost'
             : 'normal',
   );
@@ -174,15 +184,19 @@
     writeVolume(siteVolumesStore, hostname, v);
   }
 
-  function commitShownVolume(v: number): void {
-    previewVol = v;
-    if (target === 'page') setPageVol(v);
+  function setScopeVol(scope: VolumeScope, v: number): void {
+    if (scope === 'page') setPageVol(v);
     else setSiteVol(v);
   }
 
-  function dragVolume(v: number): void {
+  function commitShownVolume(v: number): void {
     previewVol = v;
-    if (target === 'page') {
+    setScopeVol(target, v);
+  }
+
+  function dragVolume(scope: VolumeScope, v: number): void {
+    if (switchMode && scope === target) previewVol = v;
+    if (scope === 'page') {
       pageVol = v;
       writeEntry(pageVolumesStore, path, v);
     } else {
@@ -191,21 +205,29 @@
     }
   }
 
-  async function commitDrag(): Promise<void> {
-    if (Math.round(shownVol * 100) === 100) {
-      previewVol = 1;
-      const store = target === 'page' ? pageVolumesStore : siteVolumesStore;
-      const key = target === 'page' ? path : hostname;
-      await store.update((m) => {
+  async function commitDrag(scope: VolumeScope): Promise<void> {
+    const vol = scope === 'page' ? pageVol : siteVol;
+    if (Math.round(vol * 100) === 100) {
+      if (switchMode) previewVol = 1;
+      await scopeStore(scope).update((m) => {
         const next = { ...m };
-        delete next[key];
+        delete next[scopeKey(scope)];
         return next;
       });
     }
     flushSliders();
   }
 
-  function switchTarget(next: 'page' | 'site'): void {
+  function commitInput(scope: VolumeScope, raw: string): void {
+    if (!/^\d+$/.test(raw.trim())) return;
+    const pct = Number(raw.trim());
+    const maxPct = Math.round(settings.maxMultiplier * 100);
+    const v = Math.min(pct, maxPct) / 100;
+    if (switchMode && scope === target) commitShownVolume(v);
+    else setScopeVol(scope, v);
+  }
+
+  function switchTarget(next: VolumeScope): void {
     if (next === target) return;
     flushSliders();
     const inherited = shownVol;
@@ -216,21 +238,6 @@
   function flushSliders(): void {
     void pageVolumesStore.flushPending();
     void siteVolumesStore.flushPending();
-  }
-
-  function commitVolumeInput(raw: string): void {
-    if (!/^\d+$/.test(raw.trim())) return;
-    const pct = Number(raw.trim());
-    const maxPct = Math.round(settings.maxMultiplier * 100);
-    commitShownVolume(Math.min(pct, maxPct) / 100);
-  }
-
-  function selectOnFocus(e: FocusEvent): void {
-    (e.target as HTMLInputElement).select();
-  }
-
-  function commitOnEnter(e: KeyboardEvent): void {
-    if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
   }
 
   function openOptions(): void {
@@ -266,6 +273,11 @@
       delete next[hostname];
       return next;
     });
+  }
+
+  function clearScopeOf(scope: VolumeScope): void {
+    if (scope === 'page') clearPageVol();
+    else clearSiteVol();
   }
 
   function clearTargetVol(): void {
@@ -341,75 +353,49 @@
       </div>
     </section>
 
-    <section
-      class="strip"
-      class:active={activeSource === 'page' || activeSource === 'site'}
-      class:page-active={activeSource === 'page'}
-      class:site-active={activeSource === 'site'}
-    >
-      <div class="row">
-        <Segmented
-          options={[
-            { value: 'page', label: tr('scopePage') },
-            { value: 'site', label: tr('scopeSite') },
-          ]}
-          value={target}
-          onselect={switchTarget}
-        />
-        <span class="sp" aria-hidden="true"></span>
-        <button
-          type="button"
-          class="clear"
-          class:resetting={target === 'page' ? pageResetting : siteResetting}
-          onclick={clearTargetVol}
-          title={tr('resetVolume')}
-          style:visibility={targetHasVol || (target === 'page' ? pageResetting : siteResetting)
-            ? 'visible'
-            : 'hidden'}
-        >
-          <svg
-            viewBox="0 0 24 24"
-            width="12"
-            height="12"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2.2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          >
-            <polyline points="1 4 1 10 7 10" />
-            <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
-          </svg>
-        </button>
-        <div class="led-well" class:led-dim={muted}>
-          <input
-            class="led"
-            type="text"
-            inputmode="decimal"
-            value={Math.round(shownVol * 100)}
-            aria-label={targetAriaLabel}
-            onfocus={selectOnFocus}
-            onkeydown={commitOnEnter}
-            onchange={(e) => commitVolumeInput((e.target as HTMLInputElement).value)}
-          />
-          <span class="pct">%</span>
-        </div>
-      </div>
-      <div class="fader" style={`--val: ${(shownVol / settings.maxMultiplier) * 100}%`}>
-        <input
-          type="range"
-          min="0"
-          max={settings.maxMultiplier}
-          step="0.01"
-          value={shownVol}
-          aria-label={targetAriaLabel}
-          oninput={(e) => dragVolume(Number((e.target as HTMLInputElement).value))}
-          onchange={() => void commitDrag()}
-        />
-        <span class="fader-track" aria-hidden="true"><span class="fader-fill"></span></span>
-        <span class="fader-thumb" aria-hidden="true"></span>
-      </div>
-    </section>
+    {#if switchMode}
+      <VolumeScopeSwitch
+        target={target}
+        shownVol={shownVol}
+        maxMultiplier={settings.maxMultiplier}
+        muted={muted}
+        effective={effectiveSource}
+        hasTargetVol={targetHasVol}
+        resetting={target === 'page' ? pageResetting : siteResetting}
+        labels={{
+          scopePage: tr('scopePage'),
+          scopeSite: tr('scopeSite'),
+          volume: targetAriaLabel,
+          reset: tr('resetVolume'),
+        }}
+        onswitch={switchTarget}
+        ondrag={(v) => dragVolume(target, v)}
+        oncommit={() => void commitDrag(target)}
+        onled={(raw) => commitInput(target, raw)}
+        onreset={clearTargetVol}
+      />
+    {:else}
+      <VolumeDualSliders
+        pageVol={pageVol}
+        siteVol={siteVol}
+        maxMultiplier={settings.maxMultiplier}
+        muted={muted}
+        effective={effectiveSource}
+        hasPageVol={hasPageVol}
+        hasSiteVol={hasSiteVol}
+        pageResetting={pageResetting}
+        siteResetting={siteResetting}
+        labels={{
+          page: tr('pageVolume'),
+          site: tr('siteVolume'),
+          reset: tr('resetVolume'),
+        }}
+        ondrag={dragVolume}
+        oncommit={(scope) => void commitDrag(scope)}
+        onled={commitInput}
+        onreset={clearScopeOf}
+      />
+    {/if}
   {:else}
     <p class="empty">{tabTitle}</p>
   {/if}
@@ -490,54 +476,6 @@
     white-space: nowrap;
   }
 
-  .strip {
-    margin-top: 8px;
-    background: var(--panel);
-    border: 1px solid var(--line);
-    border-radius: var(--radius);
-    box-shadow: var(--panel-etched);
-    padding: 12px 14px;
-  }
-  .strip.active {
-    background: var(--panel-2);
-    box-shadow:
-      var(--panel-etched),
-      inset 3px 0 0 var(--active-color);
-  }
-  .strip.active.mute-active {
-    --active-color: var(--red);
-  }
-  .strip.active.page-active {
-    --active-color: var(--green);
-  }
-  .strip.active.site-active {
-    --active-color: var(--amber);
-  }
-
-  .row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-  .sp {
-    flex: 1;
-    min-width: 0;
-  }
-  .ch-label {
-    flex: 1;
-    min-width: 0;
-    font-family: var(--font-mono);
-    font-size: 12px;
-    font-weight: 700;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--ink);
-    text-shadow: var(--engrave-shadow);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
   .switch {
     display: inline-flex;
     align-items: center;
@@ -579,151 +517,6 @@
   }
   .switch[aria-checked='true'] .switch-thumb {
     margin-left: auto;
-  }
-
-  .led-well {
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    gap: 1px;
-    flex-shrink: 0;
-    width: 50px;
-    height: 18px;
-    box-sizing: border-box;
-    background: var(--groove);
-    border-radius: 2px;
-    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.35);
-    padding: 0 6px;
-  }
-  .led-well:focus-within {
-    outline: 2px solid var(--amber);
-    outline-offset: 1px;
-  }
-  .led {
-    width: 100%;
-    min-width: 0;
-    padding: 1px 0 0 0;
-    border: none;
-    background: transparent;
-    font-family: var(--font-mono);
-    font-size: 14px;
-    font-weight: 600;
-    line-height: 1;
-    text-align: right;
-    font-variant-numeric: tabular-nums;
-    color: var(--amber);
-    text-shadow: var(--amber-glow);
-  }
-  .led:focus-visible {
-    outline: none;
-  }
-  .pct {
-    font-size: 10px;
-    color: var(--amber);
-    text-shadow: var(--amber-glow);
-  }
-  .led-well.led-dim .led,
-  .led-well.led-dim .pct {
-    color: var(--ink-dim);
-    text-shadow: none;
-  }
-
-  .fader {
-    position: relative;
-    margin-top: 8px;
-    height: 18px;
-    touch-action: none;
-  }
-  /* Transparent native input overlays the visuals to keep dragging, keyboard
-     arrows and touch working without custom-draw geometry. */
-  .fader input[type='range'] {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    margin: 0;
-    opacity: 0;
-    cursor: pointer;
-    touch-action: none;
-  }
-  /* Track and thumb are centered with standard CSS (top:50% + translateY), so
-     the thumb always sits flush on the track across browsers. pointer-events
-     none lets clicks/drags fall through to the transparent input below. */
-  .fader-track {
-    position: absolute;
-    left: 0;
-    right: 0;
-    top: 50%;
-    transform: translateY(-50%);
-    height: 6px;
-    border-radius: 2px;
-    border: 1px solid var(--groove-border);
-    background: var(--groove);
-    box-sizing: border-box;
-    overflow: hidden;
-    pointer-events: none;
-  }
-  .fader-fill {
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    left: 0;
-    width: var(--val);
-    background: var(--amber);
-    box-sizing: border-box;
-    pointer-events: none;
-  }
-  .fader-thumb {
-    position: absolute;
-    top: 50%;
-    left: var(--val);
-    width: 12px;
-    height: 18px;
-    transform: translate(-50%, -50%);
-    border-radius: 2px;
-    background: var(--fader-knob);
-    border: 1px solid var(--line-strong);
-    box-sizing: border-box;
-    pointer-events: none;
-  }
-  /* Keyboard focus only: a mouse/touch drag must not paint a ring. */
-  .fader:has(input:focus-visible) {
-    outline: 2px solid var(--amber);
-    outline-offset: 1px;
-  }
-
-  .clear {
-    display: inline-flex;
-    align-items: center;
-    border: 1px solid transparent;
-    background: transparent;
-    color: var(--ink-dim);
-    line-height: 1;
-    cursor: pointer;
-    padding: 3px 5px;
-    border-radius: var(--radius);
-    flex-shrink: 0;
-    margin-right: 2px;
-  }
-  .clear:hover {
-    color: var(--amber);
-    border-color: var(--line);
-  }
-  .clear.resetting {
-    pointer-events: none;
-    opacity: 0;
-    transition: opacity 0.15s ease 0.2s;
-  }
-  .clear.resetting svg {
-    animation: reset-spin 0.3s ease;
-  }
-  @keyframes reset-spin {
-    from {
-      transform: rotate(0deg);
-    }
-    to {
-      transform: rotate(-360deg);
-    }
   }
 
   footer {

@@ -14,11 +14,14 @@ export interface VolumeEntry extends EntryBase {
 
 export type Lang = 'auto' | 'zh' | 'en';
 export type ThemeMode = 'auto' | 'light' | 'dark';
+export type PopupVolumeMode = 'switch' | 'dual';
+export type VolumeScope = 'page' | 'site';
 
 export interface Settings {
   lang: Lang;
   theme: ThemeMode;
   maxMultiplier: number;
+  popupVolumeMode: PopupVolumeMode;
 }
 
 export type MuteMap = Record<string, MuteEntry>;

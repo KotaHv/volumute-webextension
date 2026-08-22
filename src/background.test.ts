@@ -122,7 +122,12 @@ function fireStorage(
 
 describe('background entry', () => {
   let applyMuteToTab: typeof import('./background/mute').applyMuteToTab;
-  const defaultSettings: Settings = { lang: 'auto', theme: 'auto', maxMultiplier: 5 };
+  const defaultSettings: Settings = {
+    lang: 'auto',
+    theme: 'auto',
+    maxMultiplier: 5,
+    popupVolumeMode: 'switch',
+  };
 
   beforeEach(async () => {
     vi.stubGlobal('__BUILD_TARGET__', 'firefox');

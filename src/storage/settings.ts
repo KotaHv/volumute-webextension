@@ -5,6 +5,7 @@ const DEFAULTS: Settings = {
   lang: 'auto',
   theme: 'auto',
   maxMultiplier: DEFAULT_MAX_MULTIPLIER,
+  popupVolumeMode: 'switch',
 };
 
 const subscribers = new Set<(s: Settings) => void>();

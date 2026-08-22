@@ -481,6 +481,19 @@
               />
             </div>
             <div class="setting-row">
+              <h3>{tr('popupVolumeMode', $currentLang)}</h3>
+              <Segmented
+                wide
+                ariaLabel={tr('popupVolumeMode', $currentLang)}
+                value={settings.popupVolumeMode}
+                onselect={(mode) => void updateSettings({ popupVolumeMode: mode })}
+                options={[
+                  { value: 'switch', label: tr('modeSwitch', $currentLang) },
+                  { value: 'dual', label: tr('modeDual', $currentLang) },
+                ]}
+              />
+            </div>
+            <div class="setting-row">
               <h3>{tr('maxVolume', $currentLang)}</h3>
               <div class="max-volume-control">
                 <div class="max-volume-value">
