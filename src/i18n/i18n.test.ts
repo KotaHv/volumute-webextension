@@ -37,7 +37,7 @@ describe('resolveLang', () => {
 
 describe('t', () => {
   it('returns the translation for the resolved language', () => {
-    expect(t('zh', 'extensionName')).toBe('VoluMute');
+    expect(t('zh', 'autoMute')).toBe('自动静音');
     expect(t('en', 'autoMute')).toBe('Auto mute');
   });
 

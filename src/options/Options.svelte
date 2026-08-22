@@ -8,6 +8,7 @@
   import { currentLang, setCurrentLang, tr } from '../i18n/svelte';
   import { applyTheme } from '../theme';
   import {
+    BRAND_NAME,
     DATA_VERSION,
     DEFAULT_MAX_MULTIPLIER,
     MIN_MULTIPLIER,
@@ -313,7 +314,7 @@
   <header class="titlebar">
     <div class="brand">
       <img class="brand-mark" src="/icons/icon-32.png" alt="" />
-      <span class="brand-name">VOLUMUTE</span>
+      <span class="brand-name">{BRAND_NAME}</span>
       <span class="ver">{versionLabel}</span>
     </div>
     <nav class="tab-switch" aria-label={tr('tabSettings', $currentLang)}>

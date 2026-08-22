@@ -1,3 +1,5 @@
+export const BRAND_NAME = 'VOLUMUTE';
+
 export const KEYS = {
   autoMuted: 'autoMuted',
   siteVolumes: 'siteVolumes',

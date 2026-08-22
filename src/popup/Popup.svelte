@@ -6,7 +6,7 @@
   import { t } from '../i18n';
   import { applyTheme } from '../theme';
   import { hostnameOf, pathKeyOf } from '../core/url';
-  import { DEFAULT_MAX_MULTIPLIER, displayVersion } from '../core/constants';
+  import { BRAND_NAME, DEFAULT_MAX_MULTIPLIER, displayVersion } from '../core/constants';
   import type { MessageKey } from '../i18n';
   import type { Settings, VolumeScope } from '../core/types';
   import './strip.css';
@@ -299,7 +299,7 @@
 
 <main>
   <header class="titlebar">
-    <span class="brand-name">VOLUMUTE</span>
+    <span class="brand-name">{BRAND_NAME}</span>
     <svg
       class="brand-mark"
       class:on={hostname && activeSource === 'page'}
