@@ -10,6 +10,8 @@ export default {
   pageVolumeDesc: '仅当前网页生效, 忽略 query/hash',
   siteVolume: '网站音量',
   siteVolumeDesc: '整个网站生效',
+  scopePage: '网页',
+  scopeSite: '网站',
   enabled: '已开启',
   disabled: '已关闭',
   delete: '删除',

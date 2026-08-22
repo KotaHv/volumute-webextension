@@ -23,6 +23,8 @@
   let siteVol = $state(1);
   let hasPageVol = $state(false);
   let hasSiteVol = $state(false);
+  let target = $state<'page' | 'site'>('page');
+  let previewVol = $state<number | null>(null);
 
   const version = displayVersion(browser.runtime.getManifest().version);
   const versionLabel = __BUILD_STAMP__ ? `v${version} · ${__BUILD_STAMP__}` : `v${version}`;
@@ -43,6 +45,20 @@
         : 1,
   );
   const activePct = $derived(Math.round(activeVol * 100));
+
+  const shownRaw = $derived(
+    target === 'page'
+      ? hasPageVol
+        ? pageVol
+        : (previewVol ?? (hasSiteVol ? siteVol : 1))
+      : hasSiteVol
+        ? siteVol
+        : (previewVol ?? (hasPageVol ? pageVol : 1)),
+  );
+  const shownVol = $derived(Math.min(shownRaw, settings.maxMultiplier));
+  const targetHasVol = $derived(target === 'page' ? hasPageVol : hasSiteVol);
+  const targetAriaLabel = $derived(target === 'page' ? tr('pageVolume') : tr('siteVolume'));
+
   const iconState: IconState = $derived(
     activeSource === 'mute'
       ? 'mute'
@@ -84,6 +100,9 @@
     const pv = pageVolumesStore.snapshot();
     hasPageVol = !!pv[p];
     pageVol = pv[p]?.multiplier ?? 1;
+    if (!hasPageVol && hasSiteVol) target = 'site';
+    previewVol = null;
+
     autoMutedStore.onChange((m) => {
       muted = m[hostname]?.enabled === true;
     });
@@ -117,19 +136,7 @@
     );
   }
 
-  // 100% == DEFAULT_MULTIPLIER (1): storing a no-op override is pointless and
-  // would keep a unity gain applied. At 100% the setting is cancelled instead —
-  // the entry is dropped from the store (page or site) so the effective volume
-  // falls back to the default.
-  function writeVolume(store: typeof pageVolumesStore, key: string, v: number): void {
-    if (Math.round(v * 100) === 100) {
-      void store.update((m) => {
-        const next = { ...m };
-        delete next[key];
-        return next;
-      });
-      return;
-    }
+  function writeEntry(store: typeof pageVolumesStore, key: string, v: number): void {
     const now = Date.now();
     void store.update((m) => {
       const existing = m[key];
@@ -144,6 +151,18 @@
     });
   }
 
+  function writeVolume(store: typeof pageVolumesStore, key: string, v: number): void {
+    if (Math.round(v * 100) === 100) {
+      void store.update((m) => {
+        const next = { ...m };
+        delete next[key];
+        return next;
+      });
+      return;
+    }
+    writeEntry(store, key, v);
+  }
+
   function setPageVol(v: number): void {
     pageVol = v;
     writeVolume(pageVolumesStore, path, v);
@@ -154,20 +173,55 @@
     writeVolume(siteVolumesStore, hostname, v);
   }
 
+  function commitShownVolume(v: number): void {
+    previewVol = v;
+    if (target === 'page') setPageVol(v);
+    else setSiteVol(v);
+  }
+
+  function dragVolume(v: number): void {
+    previewVol = v;
+    if (target === 'page') {
+      pageVol = v;
+      writeEntry(pageVolumesStore, path, v);
+    } else {
+      siteVol = v;
+      writeEntry(siteVolumesStore, hostname, v);
+    }
+  }
+
+  async function commitDrag(): Promise<void> {
+    if (Math.round(shownVol * 100) === 100) {
+      previewVol = 1;
+      const store = target === 'page' ? pageVolumesStore : siteVolumesStore;
+      const key = target === 'page' ? path : hostname;
+      await store.update((m) => {
+        const next = { ...m };
+        delete next[key];
+        return next;
+      });
+    }
+    flushSliders();
+  }
+
+  function switchTarget(next: 'page' | 'site'): void {
+    if (next === target) return;
+    flushSliders();
+    const inherited = shownVol;
+    target = next;
+    previewVol = (next === 'page' ? hasPageVol : hasSiteVol) ? null : inherited;
+  }
+
   function flushSliders(): void {
     void pageVolumesStore.flushPending();
     void siteVolumesStore.flushPending();
   }
 
-  type FaderKind = 'page' | 'site';
-
-  function commitVolumeInput(kind: FaderKind, raw: string): void {
+  function commitVolumeInput(raw: string): void {
     if (!/^\d+$/.test(raw.trim())) return;
     const pct = Number(raw.trim());
     const maxPct = Math.round(settings.maxMultiplier * 100);
-    const v = Math.min(pct, maxPct) / 100;
-    if (kind === 'page') setPageVol(v);
-    else setSiteVol(v);
+    commitShownVolume(Math.min(pct, maxPct) / 100);
   }
 
   function selectOnFocus(e: FocusEvent): void {
@@ -211,6 +265,22 @@
       delete next[hostname];
       return next;
     });
+  }
+
+  function clearTargetVol(): void {
+    if (target === 'page') {
+      clearPageVol();
+      if (hasSiteVol) {
+        target = 'site';
+        previewVol = null;
+      }
+    } else {
+      clearSiteVol();
+      if (hasPageVol) {
+        target = 'page';
+        previewVol = null;
+      }
+    }
   }
 </script>
 
@@ -270,15 +340,41 @@
       </div>
     </section>
 
-    <section class="strip page-active" class:active={activeSource === 'page'}>
+    <section
+      class="strip"
+      class:active={activeSource === 'page' || activeSource === 'site'}
+      class:page-active={activeSource === 'page'}
+      class:site-active={activeSource === 'site'}
+    >
       <div class="row">
-        <span class="ch-label">{tr('pageVolume')}</span>
+        <div class="seg" role="group">
+          <button
+            type="button"
+            class:selected={target === 'page'}
+            aria-pressed={target === 'page'}
+            onclick={() => switchTarget('page')}
+          >
+            {tr('scopePage')}
+          </button>
+          <button
+            type="button"
+            class:selected={target === 'site'}
+            aria-pressed={target === 'site'}
+            onclick={() => switchTarget('site')}
+          >
+            {tr('scopeSite')}
+          </button>
+        </div>
+        <span class="sp" aria-hidden="true"></span>
         <button
+          type="button"
           class="clear"
-          class:resetting={pageResetting}
-          onclick={clearPageVol}
+          class:resetting={target === 'page' ? pageResetting : siteResetting}
+          onclick={clearTargetVol}
           title={tr('resetVolume')}
-          style:visibility={hasPageVol || pageResetting ? 'visible' : 'hidden'}
+          style:visibility={targetHasVol || (target === 'page' ? pageResetting : siteResetting)
+            ? 'visible'
+            : 'hidden'}
         >
           <svg
             viewBox="0 0 24 24"
@@ -299,85 +395,25 @@
             class="led"
             type="text"
             inputmode="decimal"
-            value={Math.round(Math.min(pageVol, settings.maxMultiplier) * 100)}
-            aria-label={tr('pageVolume')}
+            value={Math.round(shownVol * 100)}
+            aria-label={targetAriaLabel}
             onfocus={selectOnFocus}
             onkeydown={commitOnEnter}
-            onchange={(e) => commitVolumeInput('page', (e.target as HTMLInputElement).value)}
+            onchange={(e) => commitVolumeInput((e.target as HTMLInputElement).value)}
           />
           <span class="pct">%</span>
         </div>
       </div>
-      <div
-        class="fader"
-        style={`--val: ${(Math.min(pageVol, settings.maxMultiplier) / settings.maxMultiplier) * 100}%`}
-      >
+      <div class="fader" style={`--val: ${(shownVol / settings.maxMultiplier) * 100}%`}>
         <input
           type="range"
           min="0"
           max={settings.maxMultiplier}
           step="0.01"
-          value={Math.min(pageVol, settings.maxMultiplier)}
-          aria-label={tr('pageVolume')}
-          oninput={(e) => setPageVol(Number((e.target as HTMLInputElement).value))}
-          onchange={flushSliders}
-        />
-        <span class="fader-track" aria-hidden="true"><span class="fader-fill"></span></span>
-        <span class="fader-thumb" aria-hidden="true"></span>
-      </div>
-    </section>
-
-    <section class="strip site-active" class:active={activeSource === 'site'}>
-      <div class="row">
-        <span class="ch-label">{tr('siteVolume')}</span>
-        <button
-          class="clear"
-          class:resetting={siteResetting}
-          onclick={clearSiteVol}
-          title={tr('resetVolume')}
-          style:visibility={hasSiteVol || siteResetting ? 'visible' : 'hidden'}
-        >
-          <svg
-            viewBox="0 0 24 24"
-            width="12"
-            height="12"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2.2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          >
-            <polyline points="1 4 1 10 7 10" />
-            <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
-          </svg>
-        </button>
-        <div class="led-well" class:led-dim={muted}>
-          <input
-            class="led"
-            type="text"
-            inputmode="decimal"
-            value={Math.round(Math.min(siteVol, settings.maxMultiplier) * 100)}
-            aria-label={tr('siteVolume')}
-            onfocus={selectOnFocus}
-            onkeydown={commitOnEnter}
-            onchange={(e) => commitVolumeInput('site', (e.target as HTMLInputElement).value)}
-          />
-          <span class="pct">%</span>
-        </div>
-      </div>
-      <div
-        class="fader"
-        style={`--val: ${(Math.min(siteVol, settings.maxMultiplier) / settings.maxMultiplier) * 100}%`}
-      >
-        <input
-          type="range"
-          min="0"
-          max={settings.maxMultiplier}
-          step="0.01"
-          value={Math.min(siteVol, settings.maxMultiplier)}
-          aria-label={tr('siteVolume')}
-          oninput={(e) => setSiteVol(Number((e.target as HTMLInputElement).value))}
-          onchange={flushSliders}
+          value={shownVol}
+          aria-label={targetAriaLabel}
+          oninput={(e) => dragVolume(Number((e.target as HTMLInputElement).value))}
+          onchange={() => void commitDrag()}
         />
         <span class="fader-track" aria-hidden="true"><span class="fader-fill"></span></span>
         <span class="fader-thumb" aria-hidden="true"></span>
@@ -491,6 +527,50 @@
     display: flex;
     align-items: center;
     gap: 8px;
+  }
+  .sp {
+    flex: 1;
+    min-width: 0;
+  }
+  .seg {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    padding: 3px;
+    background: var(--groove);
+    border: 1px solid var(--groove-border);
+    border-radius: var(--radius);
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.35);
+    flex-shrink: 0;
+  }
+  .seg button {
+    min-width: 48px;
+    border: 0;
+    border-radius: 2px;
+    background: transparent;
+    color: var(--ink-dim);
+    padding: 4px 10px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    cursor: pointer;
+    white-space: nowrap;
+    transition:
+      color 140ms ease,
+      background 140ms ease;
+  }
+  .seg button:hover {
+    color: var(--ink);
+  }
+  .seg button.selected {
+    color: var(--amber);
+    background: var(--panel-2);
+    box-shadow: var(--panel-etched);
+  }
+  .seg button:focus-visible {
+    outline: 2px solid var(--amber);
+    outline-offset: 1px;
   }
   .ch-label {
     flex: 1;

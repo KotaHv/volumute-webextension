@@ -10,6 +10,8 @@ export default {
   pageVolumeDesc: 'Applies to this page only; query/hash ignored',
   siteVolume: 'Site volume',
   siteVolumeDesc: 'Applies to the whole site',
+  scopePage: 'Page',
+  scopeSite: 'Site',
   enabled: 'Enabled',
   disabled: 'Disabled',
   delete: 'Delete',
