@@ -594,8 +594,8 @@
     content: '';
     opacity: 0.5;
     background-image:
-      linear-gradient(rgba(255, 255, 255, 0.022) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(255, 255, 255, 0.022) 1px, transparent 1px);
+      linear-gradient(var(--grid-line) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
     background-size: 28px 28px;
     mask-image: linear-gradient(to bottom, black, transparent 78%);
   }

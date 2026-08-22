@@ -457,7 +457,7 @@
     font-family: var(--font-mono);
     font-size: 9px;
     letter-spacing: 0.03em;
-    color: var(--ink-faint);
+    color: var(--ink-dim);
     line-height: 1.4;
   }
   .meta-row .k {
@@ -465,7 +465,6 @@
   }
   .meta-row .v {
     font-variant-numeric: tabular-nums;
-    color: var(--ink-dim);
   }
 
   .badge {
