@@ -57,7 +57,8 @@
     min-width: 48px;
     font-family: var(--font-mono);
     font-size: 10px;
-    letter-spacing: 0.04em;
+    font-weight: 600;
+    letter-spacing: 0.06em;
     text-transform: uppercase;
     cursor: pointer;
     white-space: nowrap;
@@ -72,6 +73,7 @@
   }
   .segmented button:hover {
     color: var(--ink);
+    background: var(--panel);
   }
   .segmented button.selected {
     color: var(--amber);

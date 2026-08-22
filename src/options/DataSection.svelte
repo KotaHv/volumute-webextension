@@ -359,6 +359,9 @@
     box-shadow: var(--well-shadow);
     padding: 0 9px;
     cursor: pointer;
+    transition:
+      color 140ms ease,
+      background 140ms ease;
   }
   .sort .icon {
     display: block;
@@ -573,9 +576,9 @@
     color: var(--ink-dim);
     cursor: pointer;
     transition:
-      color 120ms ease,
-      border-color 120ms ease,
-      background 120ms ease;
+      color 140ms ease,
+      border-color 140ms ease,
+      background 140ms ease;
   }
   button:hover {
     border-color: var(--amber);

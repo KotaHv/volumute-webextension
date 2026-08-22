@@ -769,7 +769,7 @@
     font-family: var(--font-mono);
     font-size: 10px;
     font-weight: 600;
-    letter-spacing: 0.09em;
+    letter-spacing: 0.06em;
     text-transform: uppercase;
     color: var(--ink-dim);
     cursor: pointer;
@@ -991,6 +991,7 @@
   }
   .import-mode button:hover {
     color: var(--ink);
+    background: var(--panel);
   }
   .import-mode button.active {
     color: var(--amber);
@@ -1064,9 +1065,9 @@
     color: var(--ink-dim);
     cursor: pointer;
     transition:
-      color 120ms ease,
-      border-color 120ms ease,
-      background 120ms ease;
+      color 140ms ease,
+      border-color 140ms ease,
+      background 140ms ease;
   }
   .dialog-actions button:hover {
     border-color: var(--amber);
