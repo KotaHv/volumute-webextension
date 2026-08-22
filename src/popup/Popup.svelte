@@ -82,6 +82,12 @@
             : 'normal',
   );
 
+  const activeDbLabel = $derived.by(() => {
+    if (muted || activeVol <= 0) return '−∞';
+    const db = 20 * Math.log10(activeVol);
+    return `${db > 0 ? '+' : ''}${db.toFixed(1)}`;
+  });
+
   onMount(async () => {
     settings = await getSettings();
     applyTheme(settings.theme);
@@ -335,6 +341,7 @@
     <div class="site" class:dual={settings.popupVolumeMode === 'dual'}>
       <span class="site-name">{tabTitle}</span>
       <span class="site-host">{hostname}</span>
+      <span class="site-db">{activeDbLabel} dB</span>
     </div>
 
     <section class="strip mute-active" class:active={activeSource === 'mute'}>
@@ -477,12 +484,21 @@
   }
   .site-host {
     font-family: var(--font-mono);
-    font-size: 11px;
-    letter-spacing: 0.04em;
+    font-size: 12px;
+    letter-spacing: 0.06em;
     color: var(--ink-dim);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+  .site-db {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    color: var(--amber);
+    text-shadow: var(--amber-glow);
+    font-variant-numeric: tabular-nums;
   }
 
   .switch {
