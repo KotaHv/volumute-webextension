@@ -416,6 +416,10 @@
     color: var(--ink);
     box-sizing: border-box;
   }
+  :global(html.android) main {
+    width: 100%;
+    min-height: 100vh;
+  }
 
   .titlebar {
     display: flex;
