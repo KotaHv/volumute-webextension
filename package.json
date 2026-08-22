@@ -1,6 +1,6 @@
 {
   "name": "volumute",
-  "version": "0.1.6",
+  "version": "0.2.0",
   "description": "VoluMute - site-based auto mute and per-page/per-site volume control",
   "private": true,
   "type": "module",
