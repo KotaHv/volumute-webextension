@@ -11,7 +11,12 @@ let supportedPromise: Promise<boolean> | null = null;
 export function tabMuteSupported(): Promise<boolean> {
   return (supportedPromise ??= browser.runtime
     .getPlatformInfo()
-    .then((p) => p.os !== 'android'));
+    .then((p) => p.os !== 'android')
+    .catch((err) => {
+      console.warn('[VoluMute] platform detection failed:', err);
+      supportedPromise = null;
+      return false;
+    }));
 }
 
 export let maxMultiplier = DEFAULT_MAX_MULTIPLIER;

@@ -1,6 +1,6 @@
 import browser from 'webextension-polyfill';
 import { hostnameOf } from '../core/url';
-import { DEFAULT_MAX_MULTIPLIER } from '../core/constants';
+import { DEFAULT_MAX_MULTIPLIER, KEYS } from '../core/constants';
 import { autoMutedStore, pageVolumesStore, siteVolumesStore } from '../storage/stores';
 import { getSettings } from '../storage/settings';
 import { clearUserMuteChoices, rememberUserMuteChoice } from '../storage/session';
@@ -28,10 +28,10 @@ function enqueue(task: () => Promise<void>): void {
 
 browser.storage.onChanged.addListener((changes, areaName) => {
   if (areaName === 'sync') {
-    const mute = diffMute(changes['autoMuted']?.oldValue, changes['autoMuted']?.newValue);
+    const mute = diffMute(changes[KEYS.autoMuted]?.oldValue, changes[KEYS.autoMuted]?.newValue);
     if (mute.size) enqueue(() => applyMuteToTabs(mute));
 
-    const max = settingsMaxChanged(changes['settings']?.oldValue, changes['settings']?.newValue);
+    const max = settingsMaxChanged(changes[KEYS.settings]?.oldValue, changes[KEYS.settings]?.newValue);
     if (max.changed) {
       enqueue(() => {
         setMaxMultiplier(max.newMax ?? DEFAULT_MAX_MULTIPLIER);
@@ -43,8 +43,8 @@ browser.storage.onChanged.addListener((changes, areaName) => {
     }
   } else if (areaName === 'local') {
     const volChanges = new Map<string, number>([
-      ...diffVolumes(changes['siteVolumes']?.oldValue, changes['siteVolumes']?.newValue),
-      ...diffVolumes(changes['pageVolumes']?.oldValue, changes['pageVolumes']?.newValue),
+      ...diffVolumes(changes[KEYS.siteVolumes]?.oldValue, changes[KEYS.siteVolumes]?.newValue),
+      ...diffVolumes(changes[KEYS.pageVolumes]?.oldValue, changes[KEYS.pageVolumes]?.newValue),
     ]);
     if (volChanges.size) enqueue(() => applyVolumeToTabs(volChanges));
   }

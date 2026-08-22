@@ -21,6 +21,7 @@
     title,
     rows,
     emptyText,
+    allowMultiplierSort = false,
     selected = new SvelteSet<string>(),
     onDelete = () => {},
     selectable = true,
@@ -29,6 +30,7 @@
     title: string;
     rows: Row[];
     emptyText: string;
+    allowMultiplierSort?: boolean;
     selected?: Set<string>;
     onDelete?: () => void;
     selectable?: boolean;
@@ -50,7 +52,7 @@
 
   const allowedSorts = $derived(
     (['recent', 'name', 'created', 'multiplier'] as SortKey[]).filter(
-      (k) => k !== 'multiplier' || rows.some((r) => r.multiplier !== undefined),
+      (k) => k !== 'multiplier' || allowMultiplierSort,
     ),
   );
 
@@ -91,7 +93,8 @@
 
   function cycleSort(): void {
     const list = allowedSorts;
-    sortKey = list[(list.indexOf(sortKey) + 1) % list.length];
+    const index = list.indexOf(sortKey);
+    sortKey = list[(index + 1) % list.length] ?? 'recent';
     void uiPrefsStore.update((m) => ({
       ...m,
       [id]: { value: sortKey, lastUsed: Date.now() },

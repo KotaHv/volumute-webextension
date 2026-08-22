@@ -19,7 +19,6 @@
   --ink-faint: #565e6b;
   /* LEDs */
   --amber: #ffb347;
-  --amber-dim: #57482f;
   --amber-fg: #181206;
   --amber-glow: 0 0 7px rgba(255, 179, 71, 0.38);
   --green: #3fce8f;
@@ -56,7 +55,6 @@
   --ink-faint: #969ca4;
   /* LEDs */
   --amber: #8a5600;
-  --amber-dim: #d6bd8b;
   --amber-fg: #fff8ea;
   --amber-glow: 0 0 6px rgba(138, 86, 0, 0.26);
   --green: #0c7d54;
@@ -85,7 +83,6 @@
     --ink-dim: #5d636c;
     --ink-faint: #969ca4;
     --amber: #8a5600;
-    --amber-dim: #d6bd8b;
     --amber-fg: #fff8ea;
     --amber-glow: 0 0 6px rgba(138, 86, 0, 0.26);
     --green: #0c7d54;

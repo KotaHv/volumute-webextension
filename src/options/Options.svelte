@@ -442,6 +442,7 @@
           />
           <DataSection
             id="sites"
+            allowMultiplierSort
             title={tr('siteVolume', $currentLang)}
             rows={siteRows}
             emptyText={tr('noEntries', $currentLang)}
@@ -450,6 +451,7 @@
           />
           <DataSection
             id="pages"
+            allowMultiplierSort
             title={tr('pageVolume', $currentLang)}
             rows={pageRows}
             emptyText={tr('noEntries', $currentLang)}

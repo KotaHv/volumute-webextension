@@ -30,6 +30,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 export class KVStore<T extends TimedEntry> {
   private cache: EntryMap<T> = {};
   private loaded = false;
+  private initPromise: Promise<void> | null = null;
   private writeTimer: ReturnType<typeof setTimeout> | null = null;
   private writePromise: Promise<void> = Promise.resolve();
   private subscribers = new Set<(value: EntryMap<T>) => void>();
@@ -48,7 +49,15 @@ export class KVStore<T extends TimedEntry> {
     private readonly schemaVersion = 2,
   ) {}
 
-  async init(): Promise<void> {
+  init(): Promise<void> {
+    this.initPromise ??= this.doInit().catch((err) => {
+      this.initPromise = null;
+      throw err;
+    });
+    return this.initPromise;
+  }
+
+  private async doInit(): Promise<void> {
     if (this.loaded) return;
     const area = browser.storage[this.area];
     const versionKey = schemaVersionKey(this.key);
